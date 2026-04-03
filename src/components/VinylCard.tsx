@@ -1,0 +1,90 @@
+"use client";
+
+import Link from "next/link";
+import { ShoppingCart } from "lucide-react";
+import { Vinyl, CONDITION_LABELS } from "@/lib/types";
+import { useCart } from "@/context/CartContext";
+
+interface VinylCardProps {
+  vinyl: Vinyl;
+}
+
+export default function VinylCard({ vinyl }: VinylCardProps) {
+  const { addToCart } = useCart();
+
+  const conditionColor: Record<string, string> = {
+    Mint: "bg-green-500",
+    "Near Mint": "bg-green-400",
+    "Very Good": "bg-blue-500",
+    Good: "bg-yellow-500",
+    Fair: "bg-orange-500",
+    Poor: "bg-red-500",
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden flex flex-col group">
+      {/* Cover Image */}
+      <Link href={`/catalog/${vinyl.id}`} className="relative aspect-square overflow-hidden bg-zinc-100">
+        {vinyl.cover_url ? (
+          <img
+            src={vinyl.cover_url}
+            alt={vinyl.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-zinc-300">
+            <svg className="w-20 h-20" fill="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1" />
+              <circle cx="12" cy="12" r="3" />
+              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2 2" />
+            </svg>
+          </div>
+        )}
+        {/* Sold overlay */}
+        {!vinyl.available && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+            <span className="bg-red-600 text-white font-bold text-lg px-4 py-2 rounded-xl tracking-widest rotate-[-10deg] shadow-lg">VENDUTO</span>
+          </div>
+        )}
+        {/* Condition badge */}
+        <span className={`absolute top-3 right-3 text-white text-xs font-semibold px-2 py-1 rounded-full ${conditionColor[vinyl.condition] || "bg-zinc-500"}`}>
+          {CONDITION_LABELS[vinyl.condition] || vinyl.condition}
+        </span>
+      </Link>
+
+      {/* Info */}
+      <div className="p-4 flex flex-col flex-1">
+        <Link href={`/catalog/${vinyl.id}`}>
+          <h3 className="font-bold text-lg text-zinc-900 hover:text-amber-600 transition-colors line-clamp-1">
+            {vinyl.title}
+          </h3>
+        </Link>
+        <p className="text-zinc-500 text-sm mt-1">{vinyl.artist}</p>
+        {vinyl.genres && (
+          <span className="inline-block mt-2 text-xs bg-zinc-100 text-zinc-600 px-2 py-1 rounded-full w-fit">
+            {vinyl.genres.name}
+          </span>
+        )}
+        {vinyl.is_signed && (
+          <span className="inline-block mt-2 text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full w-fit font-semibold">
+            Autografato
+          </span>
+        )}
+
+        <div className="mt-auto pt-4 flex items-center justify-between">
+          <span className={`text-xl font-bold ${vinyl.available ? "text-zinc-900" : "text-zinc-400"}`}>
+            €{Number(vinyl.price).toFixed(2)}
+          </span>
+          <button
+            onClick={() => addToCart(vinyl)}
+            disabled={!vinyl.available}
+            className="bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-200 disabled:cursor-not-allowed text-zinc-900 disabled:text-zinc-400 p-2.5 rounded-xl transition-colors"
+            title={vinyl.available ? "Aggiungi al carrello" : "Vinile venduto"}
+          >
+            <ShoppingCart className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

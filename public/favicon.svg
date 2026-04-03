@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <style>
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .spinning-disc {
+        animation: spin 3s linear infinite;
+        transform-origin: 50% 50%;
+      }
+    </style>
+  </defs>
+  
+  <!-- Outer vinyl record -->
+  <g class="spinning-disc">
+    <!-- Black vinyl outer ring -->
+    <circle cx="50" cy="50" r="48" fill="#1a1a1a" stroke="#000" stroke-width="1"/>
+    
+    <!-- Vinyl grooves effect -->
+    <circle cx="50" cy="50" r="45" fill="none" stroke="#333" opacity="0.5" stroke-width="0.5"/>
+    <circle cx="50" cy="50" r="40" fill="none" stroke="#333" opacity="0.5" stroke-width="0.5"/>
+    <circle cx="50" cy="50" r="35" fill="none" stroke="#333" opacity="0.5" stroke-width="0.5"/>
+    <circle cx="50" cy="50" r="30" fill="none" stroke="#333" opacity="0.5" stroke-width="0.5"/>
+    <circle cx="50" cy="50" r="25" fill="none" stroke="#333" opacity="0.5" stroke-width="0.5"/>
+    <circle cx="50" cy="50" r="20" fill="none" stroke="#333" opacity="0.5" stroke-width="0.5"/>
+    
+    <!-- Center label (golden/amber) -->
+    <circle cx="50" cy="50" r="16" fill="#b8860b"/>
+    <circle cx="50" cy="50" r="14" fill="#d4af37"/>
+    
+    <!-- Center hole -->
+    <circle cx="50" cy="50" r="3" fill="#000"/>
+  </g>
+</svg>
