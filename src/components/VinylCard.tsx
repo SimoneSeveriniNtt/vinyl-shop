@@ -53,35 +53,35 @@ export default function VinylCard({ vinyl }: VinylCardProps) {
       </Link>
 
       {/* Info */}
-      <div className="p-4 flex flex-col flex-1">
+      <div className="p-3 sm:p-4 flex flex-col flex-1">
         <Link href={`/catalog/${vinyl.id}`}>
-          <h3 className="font-bold text-lg text-zinc-900 hover:text-amber-600 transition-colors line-clamp-1">
+          <h3 className="font-bold text-base lg:text-lg text-zinc-900 hover:text-amber-600 transition-colors line-clamp-1">
             {vinyl.title}
           </h3>
         </Link>
-        <p className="text-zinc-500 text-sm mt-1">{vinyl.artist}</p>
+        <p className="text-zinc-500 text-xs sm:text-sm mt-1 line-clamp-1">{vinyl.artist}</p>
         {vinyl.genres && (
-          <span className="inline-block mt-2 text-xs bg-zinc-100 text-zinc-600 px-2 py-1 rounded-full w-fit">
+          <span className="inline-block mt-2 text-[11px] bg-zinc-100 text-zinc-600 px-2 py-1 rounded-full w-fit">
             {vinyl.genres.name}
           </span>
         )}
         {vinyl.is_signed && (
-          <span className="inline-block mt-2 text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full w-fit font-semibold">
+          <span className="inline-block mt-2 text-[11px] bg-amber-100 text-amber-800 px-2 py-1 rounded-full w-fit font-semibold">
             Autografato
           </span>
         )}
 
-        <div className="mt-auto pt-4 flex items-center justify-between">
-          <span className={`text-xl font-bold ${vinyl.available ? "text-zinc-900" : "text-zinc-400"}`}>
+        <div className="mt-auto pt-3 flex items-center justify-between gap-2">
+          <span className={`text-lg sm:text-xl font-bold ${vinyl.available ? "text-zinc-900" : "text-zinc-400"}`}>
             €{Number(vinyl.price).toFixed(2)}
           </span>
           <button
             onClick={() => addToCart(vinyl)}
             disabled={!vinyl.available}
-            className="bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-200 disabled:cursor-not-allowed text-zinc-900 disabled:text-zinc-400 p-2.5 rounded-xl transition-colors"
+            className="bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-200 disabled:cursor-not-allowed text-zinc-900 disabled:text-zinc-400 p-2 rounded-xl transition-colors"
             title={vinyl.available ? "Aggiungi al carrello" : "Vinile venduto"}
           >
-            <ShoppingCart className="w-5 h-5" />
+            <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>

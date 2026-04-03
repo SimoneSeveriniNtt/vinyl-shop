@@ -17,6 +17,7 @@ export default function LatestReleasesCarousel() {
   const [vinyls, setVinyls] = useState<LatestVinyl[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const rowRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -35,29 +36,37 @@ export default function LatestReleasesCarousel() {
   }, []);
 
   useEffect(() => {
-    if (vinyls.length <= 1) return;
+    if (vinyls.length <= 1 || isPaused) return;
 
     const timer = setInterval(() => {
       setActiveIndex((prev) => (prev + 1) % vinyls.length);
     }, 3500);
 
     return () => clearInterval(timer);
-  }, [vinyls.length]);
+  }, [vinyls.length, isPaused]);
 
   useEffect(() => {
     if (!rowRef.current) return;
     const current = rowRef.current.querySelector<HTMLAnchorElement>(`a[data-index='${activeIndex}']`);
-    current?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    if (!current) return;
+
+    const container = rowRef.current;
+    const nextLeft = current.offsetLeft - (container.clientWidth - current.clientWidth) / 2;
+
+    container.scrollTo({
+      left: Math.max(0, nextLeft),
+      behavior: "smooth",
+    });
   }, [activeIndex]);
 
   const goPrev = () => {
     if (vinyls.length === 0) return;
-    setActiveIndex((prev) => (prev - 1 + vinyls.length) % vinyls.length);
+    setActiveIndex((prev) => Math.max(0, prev - 1));
   };
 
   const goNext = () => {
     if (vinyls.length === 0) return;
-    setActiveIndex((prev) => (prev + 1) % vinyls.length);
+    setActiveIndex((prev) => Math.min(vinyls.length - 1, prev + 1));
   };
 
   if (loading) {
@@ -77,14 +86,21 @@ export default function LatestReleasesCarousel() {
   }
 
   return (
-    <div className="rounded-2xl bg-zinc-800/70 border border-zinc-700 p-4">
+    <div
+      className="rounded-2xl bg-zinc-800/70 border border-zinc-700 p-4"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onFocusCapture={() => setIsPaused(true)}
+      onBlurCapture={() => setIsPaused(false)}
+    >
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold tracking-wider text-amber-400 uppercase">Nuove Uscite</h3>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={goPrev}
-            className="w-7 h-7 rounded-full border border-zinc-600 text-zinc-300 hover:text-white hover:border-zinc-400 flex items-center justify-center"
+            disabled={activeIndex === 0}
+            className="w-7 h-7 rounded-full border border-zinc-600 text-zinc-300 hover:text-white hover:border-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
             aria-label="Precedente"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -92,7 +108,8 @@ export default function LatestReleasesCarousel() {
           <button
             type="button"
             onClick={goNext}
-            className="w-7 h-7 rounded-full border border-zinc-600 text-zinc-300 hover:text-white hover:border-zinc-400 flex items-center justify-center"
+            disabled={activeIndex === vinyls.length - 1}
+            className="w-7 h-7 rounded-full border border-zinc-600 text-zinc-300 hover:text-white hover:border-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
             aria-label="Successivo"
           >
             <ChevronRight className="w-4 h-4" />
@@ -109,7 +126,6 @@ export default function LatestReleasesCarousel() {
             key={vinyl.id}
             data-index={i}
             href={`/catalog/${vinyl.id}`}
-            onMouseEnter={() => setActiveIndex(i)}
             className={`snap-start shrink-0 w-28 sm:w-32 group ${i === activeIndex ? "" : "opacity-90"}`}
           >
             <div className={`aspect-square rounded-xl overflow-hidden border transition-all ${i === activeIndex ? "border-amber-400 ring-2 ring-amber-400/30" : "border-zinc-700"}`}>
