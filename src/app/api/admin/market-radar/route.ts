@@ -114,25 +114,50 @@ async function fetchMusicBrainzReleases(genreKey: string): Promise<MusicBrainzRe
   const currentYear = new Date().getFullYear();
   const previousYear = currentYear - 1;
   const genreTerms = GENRE_TERMS[genreKey] || GENRE_TERMS.rock;
-  const genreClause = genreTerms.map((term) => `(release:${term} OR artist:${term})`).join(" OR ");
+  const genreClause = genreTerms.map((term) => `(release:${term} OR artist:${term} OR tag:${term})`).join(" OR ");
 
-  const query = `country:IT AND format:vinyl AND date:[${previousYear}-01-01 TO ${currentYear}-12-31] AND (${genreClause})`;
-  const url = `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(query)}&fmt=json&limit=40`;
+  const baseDateClause = `date:[${previousYear}-01-01 TO ${currentYear}-12-31]`;
+  const candidateQueries = [
+    `country:IT AND ${baseDateClause} AND (${genreClause})`,
+    `country:IT AND ${baseDateClause}`,
+    `${baseDateClause} AND (${genreClause})`,
+  ];
 
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "VinylShopRadar/1.0 (contact: admin@vinyl-shop.local)",
-      Accept: "application/json",
-    },
-    cache: "no-store",
-  });
+  async function runQuery(query: string, limit = 40): Promise<MusicBrainzRelease[]> {
+    const url = `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(query)}&fmt=json&limit=${limit}`;
 
-  if (!res.ok) {
-    throw new Error(`MusicBrainz error: ${res.status}`);
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "VinylShopRadar/1.0 (contact: admin@vinyl-shop.local)",
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      throw new Error(`MusicBrainz error: ${res.status}`);
+    }
+
+    const data = (await res.json()) as { releases?: MusicBrainzRelease[] };
+    return data.releases || [];
   }
 
-  const data = (await res.json()) as { releases?: MusicBrainzRelease[] };
-  return data.releases || [];
+  const merged = new Map<string, MusicBrainzRelease>();
+
+  for (const query of candidateQueries) {
+    const releases = await runQuery(query, 40);
+    for (const release of releases) {
+      if (!merged.has(release.id)) {
+        merged.set(release.id, release);
+      }
+    }
+
+    if (merged.size >= 25) {
+      break;
+    }
+  }
+
+  return Array.from(merged.values());
 }
 
 export async function GET(req: NextRequest) {
