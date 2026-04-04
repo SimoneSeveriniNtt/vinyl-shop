@@ -16,6 +16,8 @@ export default function CatalogPage() {
   const [search, setSearch] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("");
   const [selectedCondition, setSelectedCondition] = useState("");
+  const [sortBy, setSortBy] = useState("latest");
+  const [maxPrice, setMaxPrice] = useState(500);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 500]);
 
   useEffect(() => {
@@ -29,7 +31,15 @@ export default function CatalogPage() {
           .order("created_at", { ascending: false }),
         supabase.from("genres").select("*").order("name"),
       ]);
-      if (vinylRes.data) setVinyls(vinylRes.data);
+      if (vinylRes.data) {
+        setVinyls(vinylRes.data);
+        const highestPrice = vinylRes.data.reduce((currentMax, vinyl) => {
+          return Math.max(currentMax, Number(vinyl.price) || 0);
+        }, 0);
+        const nextMaxPrice = highestPrice > 0 ? Math.ceil(highestPrice / 10) * 10 : 500;
+        setMaxPrice(nextMaxPrice);
+        setPriceRange([0, nextMaxPrice]);
+      }
       if (genreRes.data) setGenres(genreRes.data);
       setLoading(false);
     }
@@ -43,14 +53,27 @@ export default function CatalogPage() {
       v.artist.toLowerCase().includes(search.toLowerCase());
     const matchesGenre = !selectedGenre || v.genre_id === selectedGenre;
     const matchesCondition = !selectedCondition || v.condition === selectedCondition;
-    const matchesPrice = v.price >= priceRange[0] && v.price <= priceRange[1];
+    const matchesPrice = Number(v.price) >= priceRange[0] && Number(v.price) <= priceRange[1];
     return matchesSearch && matchesGenre && matchesCondition && matchesPrice;
+  });
+
+  const displayedVinyls = [...filtered].sort((left, right) => {
+    if (sortBy === "price-asc") {
+      return Number(left.price) - Number(right.price);
+    }
+
+    if (sortBy === "price-desc") {
+      return Number(right.price) - Number(left.price);
+    }
+
+    return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
   });
 
   const clearFilters = () => {
     setSelectedGenre("");
     setSelectedCondition("");
-    setPriceRange([0, 500]);
+    setPriceRange([0, maxPrice]);
+    setSortBy("latest");
     setSearch("");
   };
 
@@ -75,7 +98,7 @@ export default function CatalogPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col md:flex-row gap-8">
           {/* Sidebar filters */}
-          <aside className="w-full md:w-64 flex-shrink-0">
+          <aside className="hidden md:block w-full md:w-72 flex-shrink-0">
             <div className="bg-white rounded-2xl p-6 shadow-sm sticky top-20">
               <Filters
                 genres={genres}
@@ -83,6 +106,9 @@ export default function CatalogPage() {
                 onGenreChange={setSelectedGenre}
                 selectedCondition={selectedCondition}
                 onConditionChange={setSelectedCondition}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                maxPrice={maxPrice}
                 priceRange={priceRange}
                 onPriceRangeChange={setPriceRange}
                 onClearFilters={clearFilters}
@@ -92,17 +118,48 @@ export default function CatalogPage() {
 
           {/* Grid */}
           <main className="flex-1">
-            <div className="flex items-center justify-between mb-6">
+            <div className="md:hidden mb-5">
+              <div className="rounded-[28px] border border-zinc-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+                <Filters
+                  genres={genres}
+                  selectedGenre={selectedGenre}
+                  onGenreChange={setSelectedGenre}
+                  selectedCondition={selectedCondition}
+                  onConditionChange={setSelectedCondition}
+                  sortBy={sortBy}
+                  onSortChange={setSortBy}
+                  maxPrice={maxPrice}
+                  priceRange={priceRange}
+                  onPriceRangeChange={setPriceRange}
+                  onClearFilters={clearFilters}
+                  showToggle
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mb-6 gap-4">
               <p className="text-zinc-500 text-sm">
-                {filtered.length} {filtered.length === 1 ? "vinile trovato" : "vinili trovati"}
+                {displayedVinyls.length} {displayedVinyls.length === 1 ? "vinile trovato" : "vinili trovati"}
               </p>
+              <div className="hidden md:flex items-center gap-3 rounded-full bg-white px-4 py-2 shadow-sm border border-zinc-200">
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Ordina</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="bg-transparent text-sm font-medium text-zinc-700 focus:outline-none"
+                >
+                  <option value="latest">Novita</option>
+                  <option value="price-asc">Prezzo crescente</option>
+                  <option value="price-desc">Prezzo decrescente</option>
+                </select>
+              </div>
             </div>
 
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
               </div>
-            ) : filtered.length === 0 ? (
+            ) : displayedVinyls.length === 0 ? (
               <div className="text-center py-20">
                 <p className="text-zinc-400 text-lg">Nessun vinile trovato</p>
                 <button onClick={clearFilters} className="mt-4 text-amber-600 hover:text-amber-700 font-medium">
@@ -111,7 +168,7 @@ export default function CatalogPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
-                {filtered.map((vinyl) => (
+                {displayedVinyls.map((vinyl) => (
                   <VinylCard key={vinyl.id} vinyl={vinyl} />
                 ))}
               </div>
