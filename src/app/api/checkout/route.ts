@@ -21,6 +21,7 @@ const CONDITION_LABELS: Record<string, string> = {
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "simone.severini@gmail.com";
 const RESEND_FROM = process.env.RESEND_FROM || "Vinyl Shop <onboarding@resend.dev>";
+const SHOP_LOGO_URL = process.env.SHOP_LOGO_URL || "https://vinyl-shop-amber.vercel.app/favicon.svg";
 
 interface OrderItem {
   id: string;
@@ -90,6 +91,7 @@ function generateAdminEmail(
     
     <!-- Header -->
     <div style="background: linear-gradient(135deg, #18181b 0%, #27272a 100%); border-radius: 16px 16px 0 0; padding: 32px; text-align: center;">
+      <img src="${SHOP_LOGO_URL}" alt="Vinyl Shop" width="56" height="56" style="display:block; margin: 0 auto 12px; border-radius: 999px; background: #ffffff; padding: 8px;" />
       <h1 style="margin: 0; color: #fbbf24; font-size: 28px; letter-spacing: -0.5px;">🎵 Vinyl Shop</h1>
       <p style="margin: 8px 0 0; color: #a1a1aa; font-size: 14px;">🛒 Nuovo ordine ricevuto!</p>
     </div>
@@ -225,6 +227,7 @@ function generateBuyerEmail(
 <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <div style="max-width:640px;margin:0 auto;padding:20px;">
     <div style="background:linear-gradient(135deg,#18181b 0%,#27272a 100%);border-radius:16px 16px 0 0;padding:32px;text-align:center;">
+      <img src="${SHOP_LOGO_URL}" alt="Vinyl Shop" width="56" height="56" style="display:block;margin:0 auto 12px;border-radius:999px;background:#ffffff;padding:8px;" />
       <h1 style="margin:0;color:#fbbf24;font-size:28px;">🎵 Vinyl Shop</h1>
       <p style="margin:8px 0 0;color:#a1a1aa;font-size:14px;">Grazie per il tuo acquisto!</p>
     </div>
