@@ -287,6 +287,77 @@ function generateBuyerEmail(
 </html>`;
 }
 
+function generateAdminText(
+  customer: CustomerData,
+  items: OrderItem[],
+  subtotal: number,
+  shipping: number,
+  total: number,
+  orderId: string,
+  orderDate: string
+): string {
+  const rows = items
+    .map((item) => `- ${item.title} / ${item.artist} x${item.quantity} (€${(item.price * item.quantity).toFixed(2)})`)
+    .join("\n");
+
+  return [
+    `Vinyl Shop - Nuovo ordine #${orderId.substring(0, 8).toUpperCase()}`,
+    `Data: ${orderDate}`,
+    "",
+    `Cliente: ${customer.firstName} ${customer.lastName}`,
+    `Email: ${customer.email}`,
+    `Telefono: ${customer.phone}`,
+    "",
+    "Indirizzo spedizione:",
+    `${customer.address}`,
+    `${customer.cap} ${customer.city} (${customer.province.toUpperCase()})`,
+    `${customer.country}`,
+    "",
+    customer.notes ? `Note: ${customer.notes}` : "Note: -",
+    "",
+    "Prodotti:",
+    rows,
+    "",
+    `Subtotale: €${subtotal.toFixed(2)}`,
+    `Spedizione: ${shipping === 0 ? "Gratis" : `€${shipping.toFixed(2)}`}`,
+    `Totale: €${total.toFixed(2)}`,
+  ].join("\n");
+}
+
+function generateBuyerText(
+  customer: CustomerData,
+  items: OrderItem[],
+  subtotal: number,
+  shipping: number,
+  total: number,
+  orderId: string,
+  orderDate: string
+): string {
+  const rows = items
+    .map((item) => `- ${item.title} / ${item.artist} x${item.quantity} (€${(item.price * item.quantity).toFixed(2)})`)
+    .join("\n");
+
+  return [
+    `Ciao ${customer.firstName},`,
+    "",
+    `il tuo ordine #${orderId.substring(0, 8).toUpperCase()} e stato confermato (${orderDate}).`,
+    "",
+    "Indirizzo spedizione:",
+    `${customer.address}`,
+    `${customer.cap} ${customer.city} (${customer.province.toUpperCase()})`,
+    `${customer.country}`,
+    "",
+    "Prodotti:",
+    rows,
+    "",
+    `Subtotale: €${subtotal.toFixed(2)}`,
+    `Spedizione: ${shipping === 0 ? "Gratis" : `€${shipping.toFixed(2)}`}`,
+    `Totale: €${total.toFixed(2)}`,
+    "",
+    "Grazie per aver acquistato su Vinyl Shop.",
+  ].join("\n");
+}
+
 export async function POST(req: NextRequest) {
   let reservedVinylIds: string[] = [];
 
@@ -407,9 +478,14 @@ export async function POST(req: NextRequest) {
 
     // Generate email HTML for admin
     const adminEmailHtml = generateAdminEmail(customer, items, subtotal, shipping, total, order.id, orderDate);
+    const adminEmailText = generateAdminText(customer, items, subtotal, shipping, total, order.id, orderDate);
 
     // Generate confirmation email HTML for buyer
     const buyerEmailHtml = generateBuyerEmail(customer, items, subtotal, shipping, total, order.id, orderDate);
+    const buyerEmailText = generateBuyerText(customer, items, subtotal, shipping, total, order.id, orderDate);
+
+    let adminEmailSent = false;
+    let buyerEmailSent = false;
 
     // Send emails via Resend. In no-domain mode (onboarding@resend.dev), recipient restrictions may apply.
     if (!resend) {
@@ -421,11 +497,14 @@ export async function POST(req: NextRequest) {
           to: ADMIN_EMAIL,
           subject: `🎵 Nuovo Ordine #${order.id.substring(0, 8).toUpperCase()} — ${customer.firstName} ${customer.lastName} — €${total.toFixed(2)}`,
           html: adminEmailHtml,
+          text: adminEmailText,
           replyTo: customer.email,
         });
 
         if (adminResult.error) {
           console.error("Admin email error:", adminResult.error);
+        } else {
+          adminEmailSent = true;
         }
       } catch (e) {
         console.error("Admin email error:", e);
@@ -437,17 +516,27 @@ export async function POST(req: NextRequest) {
           to: customer.email,
           subject: `✅ Ordine confermato #${order.id.substring(0, 8).toUpperCase()} — Vinyl Shop`,
           html: buyerEmailHtml,
+          text: buyerEmailText,
         });
 
         if (buyerResult.error) {
           console.error("Buyer email error:", buyerResult.error);
+        } else {
+          buyerEmailSent = true;
         }
       } catch (e) {
         console.error("Buyer email error:", e);
       }
     }
 
-    return NextResponse.json({ success: true, orderId: order.id });
+    return NextResponse.json({
+      success: true,
+      orderId: order.id,
+      email: {
+        adminSent: adminEmailSent,
+        buyerSent: buyerEmailSent,
+      },
+    });
   } catch (error) {
     console.error("Checkout error:", error);
 
