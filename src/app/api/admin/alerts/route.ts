@@ -142,14 +142,65 @@ export async function POST(req: NextRequest) {
     if (action === "addArtist") {
       const artistName = String(body?.artistName || "").trim();
       const genre = String(body?.genre || "").trim() || null;
+      const normalizedArtist = artistName.toLowerCase();
 
       if (!artistName) {
         return NextResponse.json({ success: false, error: "Nome artista mancante" }, { status: 400 });
       }
 
+      const { data: existingArtist, error: existingError } = await supabase
+        .from("watched_artists")
+        .select("id, is_active")
+        .eq("artist_name_lower", normalizedArtist)
+        .maybeSingle();
+
+      if (existingError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: existingError.message,
+            code: existingError.code || null,
+            details: existingError.details || null,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (existingArtist?.id) {
+        const { error: reactivateError } = await supabase
+          .from("watched_artists")
+          .update({
+            artist_name: artistName,
+            artist_name_lower: normalizedArtist,
+            genre,
+            is_active: true,
+          })
+          .eq("id", existingArtist.id);
+
+        if (reactivateError) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: reactivateError.message,
+              code: reactivateError.code || null,
+              details: reactivateError.details || null,
+            },
+            { status: 400 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          reactivated: true,
+          message: existingArtist.is_active
+            ? "Artista gia presente nei monitorati"
+            : "Artista riattivato nei monitorati",
+        });
+      }
+
       const { error } = await supabase.from("watched_artists").insert({
         artist_name: artistName,
-        artist_name_lower: artistName.toLowerCase(),
+        artist_name_lower: normalizedArtist,
         genre,
       });
 
@@ -165,7 +216,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, created: true, message: "Artista aggiunto ai monitorati" });
     }
 
     if (action === "removeArtist") {

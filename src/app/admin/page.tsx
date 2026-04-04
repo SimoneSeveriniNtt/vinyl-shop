@@ -282,7 +282,7 @@ export default function AdminPage() {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw payload;
 
-      showMessage("success", `${newArtistInput} aggiunto ai monitorati`);
+      showMessage("success", payload.message || `${newArtistInput} aggiunto ai monitorati`);
       setNewArtistInput("");
       setNewArtistGenre("Pop");
       await fetchAlertData();
