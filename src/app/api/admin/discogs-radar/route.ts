@@ -57,8 +57,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Search releases on Discogs
-    const releases = await searchDiscogsReleases(artist, album || undefined, 50);
+    // Fetch a single Discogs page to avoid burst calls that trigger rate limiting.
+    const searchPage = await searchDiscogsReleases(artist, album || undefined, page, limit);
+    const releases = searchPage.results;
 
     if (releases.length === 0) {
       return NextResponse.json({
@@ -96,10 +97,7 @@ export async function GET(req: NextRequest) {
     // Sort by rarity_score descending
     radarItems.sort((a, b) => b.rarity_score - a.rarity_score);
 
-    // Pagination
-    const start = (page - 1) * limit;
-    const items = radarItems.slice(start, start + limit);
-    const hasMore = start + limit < radarItems.length;
+    const hasMore = searchPage.page < searchPage.pages;
 
     return NextResponse.json({
       success: true,
@@ -111,12 +109,22 @@ export async function GET(req: NextRequest) {
       limit,
       total: radarItems.length,
       hasMore,
-      items,
+      items: radarItems,
       generatedAt: new Date().toISOString(),
       note: "Dati Discogs con calcolo rarità basato su edizioni, formati, anni",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore radar Discogs";
+    if (message.includes("429")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Discogs sta limitando temporaneamente le richieste (429). Riprova tra pochi secondi.",
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

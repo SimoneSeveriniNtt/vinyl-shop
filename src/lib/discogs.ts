@@ -5,6 +5,7 @@
 
 const DISCOGS_BASE = "https://api.discogs.com";
 const USER_AGENT = "VinylShopRadar/1.0 (+http://vinyl-shop.local)";
+const DISCOGS_TOKEN = process.env.DISCOGS_TOKEN;
 
 interface DiscogsArtist {
   id: number;
@@ -62,15 +63,40 @@ export interface DiscogsRadarItem {
   images: Array<{ uri: string; uri150: string }>;
 }
 
-async function fetchDiscogs(path: string): Promise<any> {
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryDelayMs(res: Response, attempt: number): number {
+  const retryAfter = Number.parseInt(res.headers.get("retry-after") || "", 10);
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return retryAfter * 1000;
+  }
+
+  // Discogs usually resets quickly; keep retries short and bounded.
+  return Math.min(3000, 1000 * (attempt + 1));
+}
+
+async function fetchDiscogs(path: string, attempt = 0): Promise<any> {
   const url = `${DISCOGS_BASE}${path}`;
+  const headers: Record<string, string> = {
+    "User-Agent": USER_AGENT,
+    "Accept": "application/json",
+  };
+
+  if (DISCOGS_TOKEN) {
+    headers["Authorization"] = `Discogs token=${DISCOGS_TOKEN}`;
+  }
+
   const res = await fetch(url, {
-    headers: {
-      "User-Agent": USER_AGENT,
-      "Accept": "application/json",
-    },
+    headers,
     cache: "no-store",
   });
+
+  if (res.status === 429 && attempt < 2) {
+    await sleep(getRetryDelayMs(res, attempt));
+    return fetchDiscogs(path, attempt + 1);
+  }
 
   if (!res.ok) {
     throw new Error(`Discogs API error: ${res.status}`);
@@ -82,16 +108,22 @@ async function fetchDiscogs(path: string): Promise<any> {
 export async function searchDiscogsReleases(
   artist: string,
   album?: string,
-  limit = 20
-): Promise<DiscogsRelease[]> {
+  page = 1,
+  perPage = 20
+): Promise<{ results: DiscogsRelease[]; pages: number; page: number; perPage: number }> {
   const query = album ? `${artist} ${album}` : artist;
   const encoded = encodeURIComponent(query);
 
   const data = await fetchDiscogs(
-    `/database/search?q=${encoded}&type=release&format=Vinyl&limit=${limit}`
+    `/database/search?q=${encoded}&type=release&format=Vinyl&page=${page}&per_page=${perPage}`
   );
 
-  return data.results || [];
+  return {
+    results: data.results || [],
+    pages: data.pagination?.pages || 1,
+    page: data.pagination?.page || page,
+    perPage: data.pagination?.per_page || perPage,
+  };
 }
 
 export async function getReleaseDetails(releaseId: number): Promise<DiscogsReleaseDetail> {

@@ -192,13 +192,6 @@ export default function AdminPage() {
     }
   }, [tab, radarAutoFetched, radarLoading, fetchDiscogsRadar, radarArtistFilter]);
 
-  // Auto-refetch when any filter changes (only after initial load)
-  useEffect(() => {
-    if (tab === "radar" && radarAutoFetched && radarArtistFilter) {
-      void fetchDiscogsRadar(1, false);
-    }
-  }, [radarArtistFilter, radarAlbumInput, radarMinRarity, tab, radarAutoFetched, fetchDiscogsRadar]);
-
   useEffect(() => {
     setRadarAutoFetched(false);
     setRadarError("");
