@@ -27,20 +27,18 @@ function generateSessionId(): string {
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [sessionId, setSessionId] = useState<string>("");
-  const [expiresInSeconds, setExpiresInSeconds] = useState<number | undefined>();
-  const [isExpired, setIsExpired] = useState(false);
-  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Generare/caricare session ID
-  useEffect(() => {
+  const [sessionId] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
     const stored = localStorage.getItem(SESSION_ID_KEY);
     const id = stored || generateSessionId();
     if (!stored) {
       localStorage.setItem(SESSION_ID_KEY, id);
     }
-    setSessionId(id);
-  }, []);
+    return id;
+  });
+  const [expiresInSeconds, setExpiresInSeconds] = useState<number | undefined>();
+  const [isExpired, setIsExpired] = useState(false);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Caricare il carrello dal DB (ma prima dal localStorage per velocità)
   useEffect(() => {
@@ -138,11 +136,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems((prev) => {
       const existing = prev.find((item) => item.vinyl.id === vinyl.id);
       if (existing) {
-        return prev.map((item) =>
-          item.vinyl.id === vinyl.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
+        // Each vinyl is unique stock: keep quantity fixed to 1.
+        return prev;
       }
       return [...prev, { vinyl, quantity: 1 }];
     });
@@ -159,7 +154,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
     setItems((prev) =>
       prev.map((item) =>
-        item.vinyl.id === vinylId ? { ...item, quantity } : item
+        item.vinyl.id === vinylId ? { ...item, quantity: 1 } : item
       )
     );
   };

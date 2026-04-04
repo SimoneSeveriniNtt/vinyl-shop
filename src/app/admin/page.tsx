@@ -21,6 +21,14 @@ interface VinylForm {
   release_year: string;
 }
 
+interface EbayPublishResponse {
+  success: boolean;
+  listingId?: string;
+  offerId?: string;
+  note?: string;
+  error?: string;
+}
+
 const emptyForm: VinylForm = {
   title: "",
   artist: "",
@@ -74,13 +82,6 @@ export default function AdminPage() {
   const [extraImages, setExtraImages] = useState<string[]>([]);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  useEffect(() => {
-    if (user) {
-      fetchData();
-      fetchOrders();
-    }
-  }, [user]);
-
   async function fetchData() {
     setLoading(true);
     const [vinylRes, genreRes] = await Promise.all([
@@ -99,6 +100,17 @@ export default function AdminPage() {
       .order("created_at", { ascending: false });
     if (data) setOrders(data as OrderRow[]);
   }
+
+  useEffect(() => {
+    if (!user) return;
+
+    const timer = setTimeout(() => {
+      void fetchData();
+      void fetchOrders();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [user]);
 
   async function updateOrderStatus(id: string, status: string) {
     await supabase.from("orders").update({ status }).eq("id", id);
@@ -208,7 +220,52 @@ export default function AdminPage() {
           extraImages.map((url, i) => ({ vinyl_id: data.id, image_url: url, sort_order: i }))
         );
       }
-      showMessage("success", "Vinile aggiunto al catalogo!");
+
+      let publishMessage = "Vinile aggiunto al catalogo!";
+      if (data.available) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+
+          if (token) {
+            const ebayRes = await fetch("/api/ebay/publish", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                vinyl: {
+                  id: data.id,
+                  title: data.title,
+                  artist: data.artist,
+                  description: data.description,
+                  price: data.price,
+                  condition: data.condition,
+                  cover_url: data.cover_url,
+                  available: data.available,
+                },
+              }),
+            });
+
+            const ebayData = (await ebayRes.json()) as EbayPublishResponse;
+
+            if (ebayRes.ok && ebayData.success) {
+              publishMessage = ebayData.listingId
+                ? `Vinile aggiunto e pubblicato su eBay (#${ebayData.listingId})`
+                : "Vinile aggiunto. Pubblicazione eBay completata.";
+            } else if (ebayRes.status === 503) {
+              publishMessage = "Vinile aggiunto. eBay non configurato ancora: pubblicazione automatica in attesa.";
+            } else {
+              publishMessage = `Vinile aggiunto. eBay non pubblicato: ${ebayData.error || "errore sconosciuto"}`;
+            }
+          }
+        } catch {
+          publishMessage = "Vinile aggiunto. Pubblicazione eBay non riuscita (ritenta dopo).";
+        }
+      }
+
+      showMessage("success", publishMessage);
     }
 
     closeForm();

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import Link from "next/link";
 import { ArrowLeft, Loader2, ShoppingBag, CheckCircle } from "lucide-react";
@@ -42,11 +41,11 @@ const emptyForm: CheckoutForm = {
 };
 
 export default function CheckoutPage() {
-  const { items, totalPrice, clearCart } = useCart();
-  const router = useRouter();
+  const { items, totalPrice, clearCart, expiresInSeconds, isExpired } = useCart();
   const [form, setForm] = useState<CheckoutForm>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [buyerEmailSent, setBuyerEmailSent] = useState<boolean | null>(null);
   const [error, setError] = useState("");
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
@@ -54,6 +53,29 @@ export default function CheckoutPage() {
 
   const shippingCost = totalPrice >= 50 ? 0 : 5.99;
   const grandTotal = totalPrice + shippingCost;
+  const estimatedDelivery = "2-4 giorni lavorativi";
+  const freeShippingThreshold = 50;
+
+  const filledRequiredFields = [
+    form.firstName,
+    form.lastName,
+    form.email,
+    form.phone,
+    form.address,
+    form.city,
+    form.province,
+    form.cap,
+  ].filter((value) => value.trim().length > 0).length;
+  const formComplete = filledRequiredFields === 8;
+
+  const checkoutStep = formComplete ? 2 : 1;
+
+  const reserveMinutes = Math.floor((expiresInSeconds ?? 0) / 60)
+    .toString()
+    .padStart(2, "0");
+  const reserveSeconds = Math.floor((expiresInSeconds ?? 0) % 60)
+    .toString()
+    .padStart(2, "0");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -133,6 +155,7 @@ export default function CheckoutPage() {
         throw new Error(data.error || "Errore durante l'invio dell'ordine");
       }
 
+      setBuyerEmailSent(Boolean(data?.email?.buyerSent));
       setSuccess(true);
       clearCart();
     } catch (err: unknown) {
@@ -151,9 +174,15 @@ export default function CheckoutPage() {
           <p className="text-zinc-500 mb-2">
             Grazie <span className="font-semibold text-zinc-700">{form.firstName}</span>! Il tuo ordine è stato ricevuto.
           </p>
-          <p className="text-zinc-400 text-sm mb-8">
-            Riceverai una conferma via email a <span className="font-medium text-zinc-600">{form.email}</span>
-          </p>
+          {buyerEmailSent ? (
+            <p className="text-zinc-400 text-sm mb-8">
+              Ti abbiamo inviato la conferma via email a <span className="font-medium text-zinc-600">{form.email}</span>
+            </p>
+          ) : (
+            <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm mb-8">
+              Ordine registrato correttamente. L&apos;email di conferma non è partita, ti contatteremo noi manualmente.
+            </p>
+          )}
           <Link
             href="/catalog"
             className="inline-block bg-amber-400 hover:bg-amber-500 text-zinc-900 font-semibold px-6 py-3 rounded-xl transition-colors"
@@ -165,7 +194,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !success) {
     return (
       <div className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center px-4">
         <ShoppingBag className="w-16 h-16 text-zinc-300 mb-4" />
@@ -186,7 +215,56 @@ export default function CheckoutPage() {
           Torna al carrello
         </Link>
 
-        <h1 className="text-3xl font-bold text-zinc-900 mb-8">Checkout</h1>
+        <h1 className="text-3xl font-bold text-zinc-900 mb-4">Checkout</h1>
+
+        <div className="bg-white rounded-2xl border border-zinc-200 p-4 sm:p-5 mb-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-6">
+              <div className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-full grid place-items-center text-xs font-bold ${checkoutStep >= 1 ? "bg-zinc-900 text-white" : "bg-zinc-200 text-zinc-500"}`}>
+                  1
+                </div>
+                <span className="text-sm font-medium text-zinc-700">Dati</span>
+              </div>
+              <div className="w-8 sm:w-14 h-px bg-zinc-200" />
+              <div className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-full grid place-items-center text-xs font-bold ${checkoutStep >= 2 ? "bg-zinc-900 text-white" : "bg-zinc-200 text-zinc-500"}`}>
+                  2
+                </div>
+                <span className="text-sm font-medium text-zinc-700">Conferma</span>
+              </div>
+            </div>
+            {expiresInSeconds !== undefined && !isExpired && (
+              <span className="text-xs sm:text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full">
+                Riserva: {reserveMinutes}:{reserveSeconds}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
+          <div className="bg-white border border-zinc-200 rounded-xl p-4">
+            <p className="text-xs uppercase tracking-wide text-zinc-400 mb-1">Spedizione</p>
+            <p className="text-sm font-semibold text-zinc-800">{shippingCost === 0 ? "Gratis" : `€${shippingCost.toFixed(2)}`}</p>
+            <p className="text-xs text-zinc-500 mt-1">Gratis sopra €{freeShippingThreshold}</p>
+          </div>
+          <div className="bg-white border border-zinc-200 rounded-xl p-4">
+            <p className="text-xs uppercase tracking-wide text-zinc-400 mb-1">Consegna stimata</p>
+            <p className="text-sm font-semibold text-zinc-800">{estimatedDelivery}</p>
+            <p className="text-xs text-zinc-500 mt-1">Con tracking appena spedito</p>
+          </div>
+          <div className="bg-white border border-zinc-200 rounded-xl p-4">
+            <p className="text-xs uppercase tracking-wide text-zinc-400 mb-1">Garanzie</p>
+            <p className="text-sm font-semibold text-zinc-800">Imballaggio antiurto</p>
+            <p className="text-xs text-zinc-500 mt-1">Reso 14 giorni • Supporto email</p>
+          </div>
+        </div>
+
+        {isExpired && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">
+            La riserva del carrello è scaduta. Torna al catalogo e verifica di nuovo la disponibilità dei vinili.
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">
@@ -371,7 +449,7 @@ export default function CheckoutPage() {
 
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || isExpired}
                   className="w-full mt-6 bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-300 text-zinc-900 font-bold py-4 rounded-xl transition-colors text-lg flex items-center justify-center gap-2"
                 >
                   {submitting ? (

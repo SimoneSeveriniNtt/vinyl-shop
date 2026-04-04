@@ -18,7 +18,7 @@ function formatTimeRemaining(seconds?: number): string {
 }
 
 export default function CartPage() {
-  const { items, removeFromCart, updateQuantity, clearCart, totalPrice, expiresInSeconds, isExpired } = useCart();
+  const { items, removeFromCart, clearCart, totalPrice, expiresInSeconds, isExpired } = useCart();
 
   if (items.length === 0) {
     return (
@@ -126,9 +126,19 @@ export default function CartPage() {
             <span>Spedizione</span>
             <span>Calcolata al checkout</span>
           </div>
-          <Link href="/checkout" className="w-full bg-amber-400 hover:bg-amber-500 text-zinc-900 font-bold py-4 rounded-xl transition-colors text-lg flex items-center justify-center gap-2">
-            Procedi al checkout <ArrowRight className="w-5 h-5" />
-          </Link>
+          {isExpired ? (
+            <button
+              type="button"
+              disabled
+              className="w-full bg-zinc-200 text-zinc-500 font-bold py-4 rounded-xl text-lg flex items-center justify-center gap-2 cursor-not-allowed"
+            >
+              Carrello scaduto
+            </button>
+          ) : (
+            <Link href="/checkout" className="w-full bg-amber-400 hover:bg-amber-500 text-zinc-900 font-bold py-4 rounded-xl transition-colors text-lg flex items-center justify-center gap-2">
+              Procedi al checkout <ArrowRight className="w-5 h-5" />
+            </Link>
+          )}
           <button
             onClick={clearCart}
             className="w-full mt-3 text-zinc-400 hover:text-red-500 transition-colors text-sm py-2"
