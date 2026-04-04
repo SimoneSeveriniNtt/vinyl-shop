@@ -15,6 +15,16 @@ interface PublishPayload {
   };
 }
 
+const DEFAULT_ADMIN_EMAIL = "simone.severini@gmail.com";
+
+function getAllowedAdminEmails(): string[] {
+  const source = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL;
+  return source
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 function getBearerToken(authHeader: string | null): string | null {
   if (!authHeader) return null;
   const [type, token] = authHeader.split(" ");
@@ -52,8 +62,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Utente non autenticato" }, { status: 401 });
     }
 
-    const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase();
-    if (userData.user.email.toLowerCase() !== adminEmail) {
+    const allowedAdminEmails = getAllowedAdminEmails();
+    if (!allowedAdminEmails.includes(userData.user.email.toLowerCase())) {
       return NextResponse.json({ success: false, error: "Non autorizzato" }, { status: 403 });
     }
 
