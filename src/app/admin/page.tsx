@@ -61,6 +61,8 @@ interface MarketRadarItem {
   daysToRelease: number | null;
   country: string;
   raritySignals: string[];
+  rarityConfidence: "Alta" | "Media" | "Bassa";
+  rarityChecklist: string[];
   opportunityScore: number;
   recommendation: "Alta" | "Media" | "Bassa";
 }
@@ -1251,10 +1253,28 @@ export default function AdminPage() {
                             {signal}
                           </span>
                         ))}
+                        <span className={`text-xs px-2 py-1 rounded-full border ${
+                          item.rarityConfidence === "Alta"
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : item.rarityConfidence === "Media"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-zinc-50 text-zinc-600 border-zinc-200"
+                        }`}>
+                          Affidabilita segnali: {item.rarityConfidence}
+                        </span>
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-zinc-400">Nessun segnale forte di rarita nel titolo/edizione.</p>
                     )}
+
+                    <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                      <p className="text-xs font-semibold text-zinc-700 mb-1">Checklist verifica rarita</p>
+                      <ul className="space-y-1">
+                        {item.rarityChecklist.map((check) => (
+                          <li key={check} className="text-xs text-zinc-600">- {check}</li>
+                        ))}
+                      </ul>
+                    </div>
 
                     <a
                       href={`https://musicbrainz.org/release/${item.id}`}

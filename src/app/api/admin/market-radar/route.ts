@@ -23,6 +23,8 @@ interface MarketRadarItem {
   daysToRelease: number | null;
   country: string;
   raritySignals: string[];
+  rarityConfidence: "Alta" | "Media" | "Bassa";
+  rarityChecklist: string[];
   opportunityScore: number;
   recommendation: "Alta" | "Media" | "Bassa";
 }
@@ -69,17 +71,22 @@ function scoreRelease(release: MusicBrainzRelease): MarketRadarItem {
   const rarityPatterns: Array<{ pattern: RegExp; signal: string; points: number }> = [
     { pattern: /limited|edizione limitata/, signal: "Limited edition", points: 18 },
     { pattern: /numbered|numerata/, signal: "Copia numerata", points: 16 },
+    { pattern: /\b\d{2,5}\s*(copies|copy|copie|pcs)\b/, signal: "Tiratura dichiarata", points: 18 },
     { pattern: /colored|color|vinile colorato/, signal: "Vinile colorato", points: 12 },
+    { pattern: /splatter|marbled|swirl|transparent|clear vinyl|red vinyl|blue vinyl/, signal: "Variante colore speciale", points: 14 },
+    { pattern: /signed|autografato|firma/, signal: "Possibile autografato", points: 22 },
     { pattern: /rsd|record store day/, signal: "Record Store Day", points: 20 },
     { pattern: /first press|prima stampa/, signal: "Prima stampa", points: 15 },
     { pattern: /import/, signal: "Import", points: 8 },
   ];
 
   let rarityScore = 0;
+  let matchedSignals = 0;
   for (const candidate of rarityPatterns) {
     if (candidate.pattern.test(text)) {
       raritySignals.push(candidate.signal);
       rarityScore += candidate.points;
+      matchedSignals += 1;
     }
   }
 
@@ -127,6 +134,24 @@ function scoreRelease(release: MusicBrainzRelease): MarketRadarItem {
   const baseScore = 20;
   const score = Math.min(100, baseScore + recencyScore + rarityScore + italianBonus + preorderBonus);
 
+  let rarityConfidence: MarketRadarItem["rarityConfidence"] = "Bassa";
+  if (matchedSignals >= 3) rarityConfidence = "Alta";
+  else if (matchedSignals >= 1) rarityConfidence = "Media";
+
+  const rarityChecklist: string[] = [];
+  if (raritySignals.some((signal) => signal.includes("autograf"))) {
+    rarityChecklist.push("Verifica foto ravvicinata della firma o certificato di autenticita.");
+  }
+  if (raritySignals.some((signal) => signal.includes("Limited") || signal.includes("numerata") || signal.includes("Tiratura"))) {
+    rarityChecklist.push("Controlla numero copie dichiarate e presenza numero progressivo.");
+  }
+  if (raritySignals.some((signal) => signal.toLowerCase().includes("colore") || signal.toLowerCase().includes("variante"))) {
+    rarityChecklist.push("Conferma variante colore con codice catalogo o foto del vinile fuori busta.");
+  }
+  if (rarityChecklist.length === 0) {
+    rarityChecklist.push("Nessun segnale forte: verifica manualmente su marketplace e annunci ufficiali.");
+  }
+
   let recommendation: "Alta" | "Media" | "Bassa" = "Bassa";
   if (score >= 75) recommendation = "Alta";
   else if (score >= 55) recommendation = "Media";
@@ -140,6 +165,8 @@ function scoreRelease(release: MusicBrainzRelease): MarketRadarItem {
     daysToRelease,
     country: release.country || "N/D",
     raritySignals,
+    rarityConfidence,
+    rarityChecklist,
     opportunityScore: score,
     recommendation,
   };
