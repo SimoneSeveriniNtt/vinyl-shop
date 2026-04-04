@@ -35,10 +35,31 @@ interface DiscogsReleaseDetail extends DiscogsRelease {
   images?: Array<{ type: string; uri: string; resource_url: string; uri150: string; width: number; height: number }>;
   master_id?: number;
   master_url?: string;
+  num_for_sale?: number;
+  lowest_price?: number;
+  community?: {
+    have?: number;
+    want?: number;
+    rating?: {
+      average?: number;
+      count?: number;
+    };
+  };
 }
 
 export interface RaritySignal {
-  type: "limited" | "colored" | "numbered" | "box_set" | "reissue" | "original_pressing" | "special_edition" | "picture_disc";
+  type:
+    | "limited"
+    | "colored"
+    | "numbered"
+    | "box_set"
+    | "reissue"
+    | "original_pressing"
+    | "special_edition"
+    | "picture_disc"
+    | "signed"
+    | "alt_cover"
+    | "upcoming";
   description: string;
   rarity_weight: number; // 1-10
 }
@@ -61,6 +82,13 @@ export interface DiscogsRadarItem {
   discogs_url: string;
   resource_url: string;
   images: Array<{ uri: string; uri150: string }>;
+  rarity_description: string;
+  marketplace: {
+    have: number;
+    want: number;
+    numForSale: number | null;
+    lowestPrice: number | null;
+  };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -111,18 +139,47 @@ export async function searchDiscogsReleases(
   page = 1,
   perPage = 20
 ): Promise<{ results: DiscogsRelease[]; pages: number; page: number; perPage: number }> {
-  const query = album ? `${artist} ${album}` : artist;
-  const encoded = encodeURIComponent(query);
-
-  const data = await fetchDiscogs(
-    `/database/search?q=${encoded}&type=release&format=Vinyl&page=${page}&per_page=${perPage}`
-  );
-
-  return {
+  const toPage = (data: any) => ({
     results: data.results || [],
     pages: data.pagination?.pages || 1,
     page: data.pagination?.page || page,
     perPage: data.pagination?.per_page || perPage,
+  });
+
+  const params = new URLSearchParams({
+    type: "release",
+    format: "Vinyl",
+    artist,
+    page: String(page),
+    per_page: String(perPage),
+  });
+
+  if (album?.trim()) {
+    params.set("release_title", album.trim());
+  }
+
+  const primaryData = await fetchDiscogs(`/database/search?${params.toString()}`);
+  const primaryPage = toPage(primaryData);
+  if (primaryPage.results.length > 0) {
+    return primaryPage;
+  }
+
+  // Fallback for artists that are poorly indexed in the strict artist field.
+  const query = album ? `${artist} ${album}` : artist;
+  const fallbackData = await fetchDiscogs(
+    `/database/search?q=${encodeURIComponent(query)}&type=release&format=Vinyl&page=${page}&per_page=${perPage}`
+  );
+  const fallbackPage = toPage(fallbackData);
+
+  // Keep only releases that still resemble the artist name to avoid noisy matches.
+  const artistLower = artist.trim().toLowerCase();
+  const filtered = fallbackPage.results.filter((r: DiscogsRelease) =>
+    `${r.title} ${(r.artists || []).map((a: DiscogsArtist) => a.name).join(" ")}`.toLowerCase().includes(artistLower)
+  );
+
+  return {
+    ...fallbackPage,
+    results: filtered.length > 0 ? filtered : fallbackPage.results,
   };
 }
 
@@ -149,12 +206,19 @@ export function extractRaritySignals(release: DiscogsReleaseDetail): RaritySigna
     { pattern: /reissue|re-issue|remaster|remastered/i, type: "reissue", desc: "Reissue", weight: 3 },
     { pattern: /first.*press|original press|original.*release|1st.*press/i, type: "original_pressing", desc: "Original Pressing", weight: 8 },
     { pattern: /picture[\s-]?disc|picture.*disc|shaped vinyl/i, type: "picture_disc", desc: "Picture Disc", weight: 8 },
+    { pattern: /signed|autograph|autographed|firmato|autografato/i, type: "signed", desc: "Signed / Autographed", weight: 10 },
+    { pattern: /alternate cover|alternative cover|alt cover|variant cover|cover variant|sleeve variant/i, type: "alt_cover", desc: "Alternate Cover", weight: 8 },
   ];
 
   for (const { pattern, type, desc, weight } of patterns) {
     if (pattern.test(text)) {
       signals.push({ type, description: desc, rarity_weight: weight });
     }
+  }
+
+  const currentYear = new Date().getFullYear();
+  if (release.year && release.year >= currentYear) {
+    signals.push({ type: "upcoming", description: "Upcoming / Pre-order Window", rarity_weight: 4 });
   }
 
   return signals;
@@ -189,7 +253,56 @@ export function calculateRarityScore(release: DiscogsReleaseDetail, signals: Rar
     score += 10;
   }
 
+  const want = release.community?.want ?? 0;
+  const have = release.community?.have ?? 0;
+  const numForSale = release.num_for_sale;
+
+  if (want > 0 && have > 0) {
+    const demandRatio = want / have;
+    if (demandRatio >= 0.45) score += 10;
+    else if (demandRatio >= 0.25) score += 6;
+  }
+
+  if (typeof numForSale === "number") {
+    if (numForSale === 0) score += 15;
+    else if (numForSale <= 3) score += 12;
+    else if (numForSale <= 10) score += 8;
+  }
+
   return Math.min(100, score);
+}
+
+function buildRarityDescription(
+  item: Pick<DiscogsRadarItem, "title" | "estimated_rarity" | "rarity_signals" | "marketplace" | "releaseYear" | "formatDetails">
+): string {
+  const signalText = item.rarity_signals.length
+    ? `Segnali forti: ${item.rarity_signals.slice(0, 3).map((s) => s.description).join(", ")}.`
+    : "Nessun segnale testuale forte nella scheda release.";
+
+  const scarcityText =
+    item.marketplace.numForSale === null
+      ? "Disponibilità marketplace non dichiarata."
+      : item.marketplace.numForSale <= 3
+      ? `Molto poca disponibilità: solo ${item.marketplace.numForSale} copie in vendita.`
+      : `Disponibilità attuale: ${item.marketplace.numForSale} copie in vendita.`;
+
+  const demandText =
+    item.marketplace.want > 0 || item.marketplace.have > 0
+      ? `Domanda Discogs: ${item.marketplace.want} utenti la cercano, ${item.marketplace.have} la possiedono.`
+      : "Domanda Discogs non disponibile.";
+
+  const yearText = item.releaseYear ? `Anno release: ${item.releaseYear}.` : "Anno release non disponibile.";
+  const formatText = item.formatDetails.length ? `Dettagli formato: ${item.formatDetails.slice(0, 3).join(", ")}.` : "";
+
+  return `${item.estimated_rarity}. ${signalText} ${scarcityText} ${demandText} ${yearText} ${formatText}`.trim();
+}
+
+export function matchesGenreFilter(item: DiscogsRadarItem, genreFilter: string): boolean {
+  const normalized = genreFilter.trim().toLowerCase();
+  if (!normalized) return true;
+
+  const pool = [...item.genres, ...item.styles].map((x) => x.toLowerCase());
+  return pool.some((entry) => entry.includes(normalized));
 }
 
 export function estimateRarityCategory(score: number): DiscogsRadarItem["estimated_rarity"] {
@@ -204,8 +317,14 @@ export async function buildRadarItem(release: DiscogsReleaseDetail): Promise<Dis
   const artist = release.artists?.[0]?.name || "Unknown";
   const signals = extractRaritySignals(release);
   const rarity_score = calculateRarityScore(release, signals);
+  const marketplace = {
+    have: release.community?.have ?? 0,
+    want: release.community?.want ?? 0,
+    numForSale: typeof release.num_for_sale === "number" ? release.num_for_sale : null,
+    lowestPrice: typeof release.lowest_price === "number" ? release.lowest_price : null,
+  };
 
-  return {
+  const baseItem: DiscogsRadarItem = {
     id: release.id,
     artist,
     title: release.title,
@@ -223,5 +342,12 @@ export async function buildRadarItem(release: DiscogsReleaseDetail): Promise<Dis
     discogs_url: release.uri || `https://www.discogs.com/release/${release.id}`,
     resource_url: release.resource_url,
     images: release.images?.map(img => ({ uri: img.uri, uri150: img.uri150 })) || [],
+    rarity_description: "",
+    marketplace,
+  };
+
+  return {
+    ...baseItem,
+    rarity_description: buildRarityDescription(baseItem),
   };
 }

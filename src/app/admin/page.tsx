@@ -78,6 +78,7 @@ export default function AdminPage() {
   const [radarArtistInput, setRadarArtistInput] = useState("");
   const [radarArtistFilter, setRadarArtistFilter] = useState("");
   const [radarAlbumInput, setRadarAlbumInput] = useState("");
+  const [radarGenreInput, setRadarGenreInput] = useState("");
   const [radarMinRarity, setRadarMinRarity] = useState(0);
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarLoadingMore, setRadarLoadingMore] = useState(false);
@@ -142,6 +143,9 @@ export default function AdminPage() {
       if (radarAlbumInput.trim()) {
         params.set("album", radarAlbumInput.trim());
       }
+      if (radarGenreInput.trim()) {
+        params.set("genre", radarGenreInput.trim());
+      }
       if (radarMinRarity > 0) {
         params.set("minRarity", String(radarMinRarity));
       }
@@ -173,7 +177,7 @@ export default function AdminPage() {
       setRadarLoading(false);
       setRadarLoadingMore(false);
     }
-  }, [radarArtistFilter, radarAlbumInput, radarMinRarity]);
+  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarMinRarity]);
 
   useEffect(() => {
     if (!user) return;
@@ -199,7 +203,7 @@ export default function AdminPage() {
     setRadarPage(1);
     setRadarHasMore(false);
     setRadarTotal(0);
-  }, [radarArtistFilter, radarAlbumInput, radarMinRarity]);
+  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarMinRarity]);
 
   function applyRadarSearch() {
     setRadarArtistFilter(radarArtistInput.trim());
@@ -1093,7 +1097,7 @@ export default function AdminPage() {
                 {/* RICERCA Section */}
                 <div className="mb-5 pb-5 border-b border-zinc-200">
                   <p className="text-xs font-semibold uppercase text-zinc-600 mb-3 tracking-wide">Ricerca</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <input
                       type="text"
                       value={radarArtistInput}
@@ -1119,6 +1123,19 @@ export default function AdminPage() {
                         }
                       }}
                       placeholder="Album (opzionale)"
+                      className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={radarGenreInput}
+                      onChange={(e) => setRadarGenreInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          applyRadarSearch();
+                        }
+                      }}
+                      placeholder="Genere (opzionale, es. rap, pop, jazz)"
                       className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
                     />
                   </div>
@@ -1180,6 +1197,7 @@ export default function AdminPage() {
                   {radarTotal > 0 ? `Risultati trovati: ${radarTotal}` : "Nessun risultato"}
                   {radarArtistFilter ? ` • artista: ${radarArtistFilter}` : ""}
                   {radarAlbumInput ? ` • album: ${radarAlbumInput}` : ""}
+                  {radarGenreInput ? ` • genere: ${radarGenreInput}` : ""}
                   {radarMinRarity > 0 ? ` • rarità >= ${radarMinRarity}` : ""}
                 </p>
                 {radarItems.map((item) => (
@@ -1240,11 +1258,21 @@ export default function AdminPage() {
                           </div>
                         )}
 
+                        {item.rarity_description && (
+                          <p className="mt-2 text-xs text-zinc-600 leading-relaxed">{item.rarity_description}</p>
+                        )}
+
                         {/* Scores & Links */}
                         <div className="mt-3 flex items-center gap-2">
                           <span className="text-xs font-semibold text-zinc-700">
                             Rarità: <span className="text-amber-600">{item.rarity_score}/100</span>
                           </span>
+                          {item.marketplace?.numForSale !== null && (
+                            <span className="text-xs text-zinc-600">In vendita: {item.marketplace.numForSale}</span>
+                          )}
+                          {item.marketplace?.lowestPrice !== null && (
+                            <span className="text-xs text-zinc-600">Prezzo min: {item.marketplace.lowestPrice}</span>
+                          )}
                           <a
                             href={item.discogs_url}
                             target="_blank"

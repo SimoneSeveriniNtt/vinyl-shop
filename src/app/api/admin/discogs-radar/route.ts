@@ -4,6 +4,7 @@ import {
   searchDiscogsReleases,
   getReleaseDetails,
   buildRadarItem,
+  matchesGenreFilter,
   type DiscogsRadarItem,
 } from "@/lib/discogs";
 
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
 
     const artist = (req.nextUrl.searchParams.get("artist") || "").trim();
     const album = (req.nextUrl.searchParams.get("album") || "").trim();
+    const genre = (req.nextUrl.searchParams.get("genre") || "").trim();
     const minRarity = Math.max(0, Math.min(100, Number.parseInt(req.nextUrl.searchParams.get("minRarity") || "0", 10) || 0));
     const page = Math.max(1, Number.parseInt(req.nextUrl.searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(40, Math.max(5, Number.parseInt(req.nextUrl.searchParams.get("limit") || "20", 10) || 20));
@@ -84,8 +86,8 @@ export async function GET(req: NextRequest) {
         const details = await getReleaseDetails(release.id);
         const item = await buildRadarItem(details);
 
-        // Apply minRarity filter
-        if (item.rarity_score >= minRarity) {
+        // Apply minRarity + genre filter
+        if (item.rarity_score >= minRarity && matchesGenreFilter(item, genre)) {
           radarItems.push(item);
         }
       } catch (e) {
@@ -94,8 +96,18 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Sort by rarity_score descending
-    radarItems.sort((a, b) => b.rarity_score - a.rarity_score);
+    // Sort by album relevance first (if album provided), then rarity.
+    const normalizedAlbum = album.toLowerCase();
+    radarItems.sort((a, b) => {
+      const aAlbumMatch = normalizedAlbum ? a.title.toLowerCase().includes(normalizedAlbum) : false;
+      const bAlbumMatch = normalizedAlbum ? b.title.toLowerCase().includes(normalizedAlbum) : false;
+
+      if (aAlbumMatch !== bAlbumMatch) {
+        return aAlbumMatch ? -1 : 1;
+      }
+
+      return b.rarity_score - a.rarity_score;
+    });
 
     const hasMore = searchPage.page < searchPage.pages;
 
@@ -104,6 +116,7 @@ export async function GET(req: NextRequest) {
       source: "Discogs",
       artist,
       album: album || null,
+      genre: genre || null,
       minRarity,
       page,
       limit,
