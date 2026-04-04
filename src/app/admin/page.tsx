@@ -101,6 +101,7 @@ export default function AdminPage() {
   const [form, setForm] = useState<VinylForm>(emptyForm);
   const [extraImages, setExtraImages] = useState<string[]>([]);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [formError, setFormError] = useState("");
 
   // Alert states
   const [watchedArtists, setWatchedArtists] = useState<any[]>([]);
@@ -522,6 +523,7 @@ export default function AdminPage() {
   function openNew() {
     setForm(emptyForm);
     setExtraImages([]);
+    setFormError("");
     setEditingId(null);
     setShowForm(true);
   }
@@ -541,6 +543,7 @@ export default function AdminPage() {
       release_year: vinyl.release_year ? String(vinyl.release_year) : "",
     });
     setExtraImages(vinyl.vinyl_images?.sort((a, b) => a.sort_order - b.sort_order).map((i) => i.image_url) || []);
+    setFormError("");
     setEditingId(vinyl.id);
     setShowForm(true);
   }
@@ -550,17 +553,23 @@ export default function AdminPage() {
     setEditingId(null);
     setForm(emptyForm);
     setExtraImages([]);
+    setFormError("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title || !form.artist || !form.price) {
-      showMessage("error", "Titolo, artista e prezzo sono obbligatori");
+      const errorText = "Titolo, artista e prezzo sono obbligatori";
+      setFormError(errorText);
+      showMessage("error", errorText);
       return;
     }
 
     setSaving(true);
-    const baseVinylData = {
+    setFormError("");
+
+    try {
+      const baseVinylData = {
       title: form.title.trim(),
       artist: form.artist.trim(),
       description: form.description.trim() || null,
@@ -571,133 +580,139 @@ export default function AdminPage() {
       is_signed: form.is_signed,
       release_year: form.release_year ? parseInt(form.release_year) : null,
       updated_at: new Date().toISOString(),
-    };
+      };
 
-    const vinylDataWithSeparatedSealed = {
+      const vinylDataWithSeparatedSealed = {
       ...baseVinylData,
       condition: form.condition,
       is_sealed: form.is_sealed,
-    };
+      };
 
-    const vinylDataLegacy = {
+      const vinylDataLegacy = {
       ...baseVinylData,
       condition: formatCondition(form.condition, form.is_sealed),
-    };
+      };
 
-    if (editingId) {
+      if (editingId) {
       // Update
-      let { error } = await supabase.from("vinyls").update(vinylDataWithSeparatedSealed).eq("id", editingId);
+        let { error } = await supabase.from("vinyls").update(vinylDataWithSeparatedSealed).eq("id", editingId);
 
       // Backward-compatible fallback for environments where is_sealed column is not migrated yet.
-      if (error?.message?.includes("is_sealed")) {
-        const legacyUpdate = await supabase.from("vinyls").update(vinylDataLegacy).eq("id", editingId);
-        error = legacyUpdate.error;
-      }
+        if (error?.message?.includes("is_sealed")) {
+          const legacyUpdate = await supabase.from("vinyls").update(vinylDataLegacy).eq("id", editingId);
+          error = legacyUpdate.error;
+        }
 
-      if (error) {
-        showMessage("error", "Errore aggiornamento: " + error.message);
-        setSaving(false);
-        return;
-      }
-      try {
-        await syncVinylImages(editingId, extraImages);
-      } catch (imageError) {
-        try {
-          await syncVinylImagesFallback(editingId, extraImages);
-        } catch (fallbackError) {
-          showMessage(
-            "error",
-            "Errore aggiornamento foto: " +
-              `${parseUnknownError(imageError)} | fallback: ${parseUnknownError(fallbackError)}`
-          );
-          setSaving(false);
+        if (error) {
+          const errorText = "Errore aggiornamento: " + error.message;
+          setFormError(errorText);
+          showMessage("error", errorText);
           return;
         }
-      }
-      showMessage("success", "Vinile aggiornato!");
-    } else {
-      // Insert
-      let insertRes = await supabase.from("vinyls").insert(vinylDataWithSeparatedSealed).select().single();
-
-      if (insertRes.error?.message?.includes("is_sealed")) {
-        insertRes = await supabase.from("vinyls").insert(vinylDataLegacy).select().single();
-      }
-
-      const data = insertRes.data;
-      const error = insertRes.error;
-
-      if (error || !data) {
-        showMessage("error", "Errore inserimento: " + (error?.message || "Errore sconosciuto"));
-        setSaving(false);
-        return;
-      }
-      try {
-        await syncVinylImages(data.id, extraImages);
-      } catch (imageError) {
         try {
-          await syncVinylImagesFallback(data.id, extraImages);
-        } catch (fallbackError) {
-          showMessage(
-            "error",
-            "Errore salvataggio foto: " +
-              `${parseUnknownError(imageError)} | fallback: ${parseUnknownError(fallbackError)}`
-          );
-          setSaving(false);
-          return;
-        }
-      }
-
-      let publishMessage = "Vinile aggiunto al catalogo!";
-      if (data.available) {
-        try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData?.session?.access_token;
-
-          if (token) {
-            const ebayRes = await fetch("/api/ebay/publish", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                vinyl: {
-                  id: data.id,
-                  title: data.title,
-                  artist: data.artist,
-                  description: data.description,
-                  price: data.price,
-                  condition: data.condition,
-                  is_sealed: form.is_sealed,
-                  cover_url: data.cover_url,
-                  available: data.available,
-                },
-              }),
-            });
-
-            const ebayData = (await ebayRes.json()) as EbayPublishResponse;
-
-            if (ebayRes.ok && ebayData.success) {
-              publishMessage = ebayData.listingId
-                ? `Vinile aggiunto e pubblicato su eBay (#${ebayData.listingId})`
-                : "Vinile aggiunto. Pubblicazione eBay completata.";
-            } else if (ebayRes.status === 503) {
-              publishMessage = "Vinile aggiunto. eBay non configurato ancora: pubblicazione automatica in attesa.";
-            } else {
-              publishMessage = `Vinile aggiunto. eBay non pubblicato: ${ebayData.error || "errore sconosciuto"}`;
-            }
+          await syncVinylImages(editingId, extraImages);
+        } catch (imageError) {
+          try {
+            await syncVinylImagesFallback(editingId, extraImages);
+          } catch (fallbackError) {
+            const errorText =
+              "Errore aggiornamento foto: " +
+              `${parseUnknownError(imageError)} | fallback: ${parseUnknownError(fallbackError)}`;
+            setFormError(errorText);
+            showMessage("error", errorText);
+            return;
           }
-        } catch {
-          publishMessage = "Vinile aggiunto. Pubblicazione eBay non riuscita (ritenta dopo).";
         }
+        showMessage("success", "Vinile aggiornato!");
+      } else {
+      // Insert
+        let insertRes = await supabase.from("vinyls").insert(vinylDataWithSeparatedSealed).select().single();
+
+        if (insertRes.error?.message?.includes("is_sealed")) {
+          insertRes = await supabase.from("vinyls").insert(vinylDataLegacy).select().single();
+        }
+
+        const data = insertRes.data;
+        const error = insertRes.error;
+
+        if (error || !data) {
+          const errorText = "Errore inserimento: " + (error?.message || "Errore sconosciuto");
+          setFormError(errorText);
+          showMessage("error", errorText);
+          return;
+        }
+        try {
+          await syncVinylImages(data.id, extraImages);
+        } catch (imageError) {
+          try {
+            await syncVinylImagesFallback(data.id, extraImages);
+          } catch (fallbackError) {
+            const errorText =
+              "Errore salvataggio foto: " +
+              `${parseUnknownError(imageError)} | fallback: ${parseUnknownError(fallbackError)}`;
+            setFormError(errorText);
+            showMessage("error", errorText);
+            return;
+          }
+        }
+
+        let publishMessage = "Vinile aggiunto al catalogo!";
+        if (data.available) {
+          try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData?.session?.access_token;
+
+            if (token) {
+              const ebayRes = await fetch("/api/ebay/publish", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  vinyl: {
+                    id: data.id,
+                    title: data.title,
+                    artist: data.artist,
+                    description: data.description,
+                    price: data.price,
+                    condition: data.condition,
+                    is_sealed: form.is_sealed,
+                    cover_url: data.cover_url,
+                    available: data.available,
+                  },
+                }),
+              });
+
+              const ebayData = (await ebayRes.json()) as EbayPublishResponse;
+
+              if (ebayRes.ok && ebayData.success) {
+                publishMessage = ebayData.listingId
+                  ? `Vinile aggiunto e pubblicato su eBay (#${ebayData.listingId})`
+                  : "Vinile aggiunto. Pubblicazione eBay completata.";
+              } else if (ebayRes.status === 503) {
+                publishMessage = "Vinile aggiunto. eBay non configurato ancora: pubblicazione automatica in attesa.";
+              } else {
+                publishMessage = `Vinile aggiunto. eBay non pubblicato: ${ebayData.error || "errore sconosciuto"}`;
+              }
+            }
+          } catch {
+            publishMessage = "Vinile aggiunto. Pubblicazione eBay non riuscita (ritenta dopo).";
+          }
+        }
+
+        showMessage("success", publishMessage);
       }
 
-      showMessage("success", publishMessage);
+      closeForm();
+      fetchData();
+    } catch (err) {
+      const errorText = "Errore imprevisto: " + parseUnknownError(err);
+      setFormError(errorText);
+      showMessage("error", errorText);
+    } finally {
+      setSaving(false);
     }
-
-    closeForm();
-    setSaving(false);
-    fetchData();
   }
 
   async function handleDelete(id: string) {
@@ -1058,6 +1073,14 @@ export default function AdminPage() {
                 </div>
 
                 <div className="flex gap-3 pt-4">
+                  {formError && (
+                    <div className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {formError}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-2">
                   <button
                     type="submit"
                     disabled={saving}
