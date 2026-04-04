@@ -23,6 +23,7 @@ interface FeltrinelliProduct {
 
 const VINYL_TERMS = /(vinyl|vinile|lp|180g|33 giri)/i;
 const PREORDER_TERMS = /(pre[ -]?order|preorder|pre-ordine|in uscita|release date|uscita)/i;
+const NON_RECORD_TERMS = /(funko|action figure|figurina|giocattol|merch|t-shirt|cd\b|dvd\b|blu-?ray)/i;
 const SIGNAL_PATTERNS: Array<{ type: RaritySignal["type"]; pattern: RegExp; description: string; weight: number }> = [
   { type: "limited", pattern: /(limited|edizione limitata|tiratura limitata|exclusive|esclusiva)/i, description: "Limited Edition", weight: 9 },
   { type: "signed", pattern: /(signed|autographed|firmato|autografato)/i, description: "Signed / Autographed", weight: 10 },
@@ -193,11 +194,12 @@ async function fetchStorePreorders(
     const text = `${title} ${author} ${delivery} ${p.item_category || ""} ${p.item_category2 || ""}`;
 
     const isVinyl = VINYL_TERMS.test(text);
+    const hasNonRecordNoise = NON_RECORD_TERMS.test(text);
     const artistMatch = text.toLowerCase().includes(artistLower);
     const albumMatch = albumLower ? text.toLowerCase().includes(albumLower) : true;
     const isPreorder = /disponibile dal|prenot|preordin|uscita/i.test(delivery) || Boolean(p.bookability);
 
-    if (!isVinyl || !artistMatch || !albumMatch) continue;
+    if (!isVinyl || hasNonRecordNoise || !artistMatch || !albumMatch) continue;
 
     const signals = computeSignals(text);
     if (isPreorder) {

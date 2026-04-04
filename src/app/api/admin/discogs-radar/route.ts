@@ -9,6 +9,43 @@ import {
 } from "@/lib/discogs";
 import { searchWebPreorderIntel } from "@/lib/preorder-intel";
 
+function buildRankingNarrative(items: DiscogsRadarItem[], album: string) {
+  const top = items.slice(0, 3).map((item, index) => {
+    const reasons: string[] = [];
+    const topSignals = item.rarity_signals.slice(0, 3).map((s) => s.description);
+    if (topSignals.length > 0) {
+      reasons.push(`Segnali rarità: ${topSignals.join(", ")}`);
+    }
+    if (item.preorder?.isPreorder) {
+      reasons.push("pre-order attivo");
+    }
+    if (item.preorder?.store) {
+      reasons.push(`store: ${item.preorder.store}`);
+    }
+    if (item.marketplace?.numForSale !== null) {
+      reasons.push(`copie in vendita: ${item.marketplace.numForSale}`);
+    }
+
+    return {
+      rank: index + 1,
+      title: item.title,
+      rarity: item.estimated_rarity,
+      score: item.rarity_score,
+      source: item.source,
+      description: item.rarity_description,
+      whyRare: reasons.length > 0 ? reasons.join(" • ") : "Edizione con segnali di rarità superiori alla media",
+      url: item.preorder?.url || item.discogs_url,
+    };
+  });
+
+  const label = album ? `Le versioni più rare di "${album}"` : "Le versioni più rare trovate";
+  return {
+    label,
+    intro: "Classifica ordinata per rarità e reperibilità, con evidenza pre-order e segnali collezionistici.",
+    items: top,
+  };
+}
+
 function getBearerToken(authHeader: string | null): string | null {
   if (!authHeader) return null;
   const [type, token] = authHeader.split(" ");
@@ -141,6 +178,7 @@ export async function GET(req: NextRequest) {
       total: deduped.length,
       hasMore,
       items: deduped,
+      rankingNarrative: buildRankingNarrative(deduped, album),
       generatedAt: new Date().toISOString(),
       note: includePreorders
         ? "Dati Discogs + Web Preorder Intel per edizioni rare e pre-order"

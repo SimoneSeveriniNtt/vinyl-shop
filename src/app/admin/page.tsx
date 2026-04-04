@@ -88,6 +88,7 @@ export default function AdminPage() {
   const [radarPage, setRadarPage] = useState(1);
   const [radarHasMore, setRadarHasMore] = useState(false);
   const [radarTotal, setRadarTotal] = useState(0);
+  const [radarNarrative, setRadarNarrative] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -168,10 +169,14 @@ export default function AdminPage() {
       setRadarPage(payload.page || page);
       setRadarHasMore(Boolean(payload.hasMore));
       setRadarTotal(payload.total || 0);
+      if (!append) {
+        setRadarNarrative(payload.rankingNarrative || null);
+      }
     } catch (error) {
       setRadarError(error instanceof Error ? error.message : "Errore caricamento Discogs");
       if (!append) {
         setRadarItems([]);
+        setRadarNarrative(null);
       }
       setRadarHasMore(false);
     } finally {
@@ -205,6 +210,7 @@ export default function AdminPage() {
     setRadarPage(1);
     setRadarHasMore(false);
     setRadarTotal(0);
+    setRadarNarrative(null);
   }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarMinRarity]);
 
   function applyRadarSearch() {
@@ -1204,6 +1210,23 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="space-y-3">
+                {radarNarrative?.items?.length > 0 && (
+                  <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-5 border border-amber-100">
+                    <h3 className="text-base font-bold text-zinc-900">{radarNarrative.label}</h3>
+                    <p className="text-xs text-zinc-500 mt-1">{radarNarrative.intro}</p>
+                    <div className="mt-3 space-y-2">
+                      {radarNarrative.items.map((entry: any) => (
+                        <div key={`${entry.rank}-${entry.title}`} className="rounded-xl border border-zinc-200 p-3 bg-zinc-50">
+                          <p className="text-sm font-semibold text-zinc-900">
+                            {entry.rank}. {entry.title}
+                          </p>
+                          <p className="text-xs text-zinc-700 mt-1">{entry.whyRare}</p>
+                          <p className="text-xs text-zinc-500 mt-1">{entry.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <p className="text-xs text-zinc-500">
                   {radarTotal > 0 ? `Risultati trovati: ${radarTotal}` : "Nessun risultato"}
                   {radarArtistFilter ? ` • artista: ${radarArtistFilter}` : ""}
@@ -1292,12 +1315,12 @@ export default function AdminPage() {
                             <span className="text-xs text-zinc-600">Prezzo min: {item.marketplace.lowestPrice}</span>
                           )}
                           <a
-                            href={item.discogs_url}
+                            href={item.preorder?.url || item.discogs_url}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-semibold ml-auto"
                           >
-                            Apri Discogs
+                            {item.source === "Web Preorder Intel" ? "Apri Store/Fonte" : "Apri Discogs"}
                             <ExternalLink className="w-3.5 h-3.5" />
                           </a>
                         </div>
