@@ -288,28 +288,24 @@ async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<Mus
   
   const baseDateClause = `date:[${previousYear}-01-01 TO ${nextYear}-12-31]`;
   
+  // Choose date filter based on upcomingOnly flag
+  const dateClause = upcomingOnly ? upcomingDateClause : baseDateClause;
+  
   let candidateQueries: string[] = [];
   
-  if (upcomingOnly && !artistClause && !textClause) {
-    // Special: pre-order discovery without artist/keyword → focus on upcoming releases in genre
+  if (artistClause || textClause) {
+    // Artist or text search: apply chosen date filter (upcoming or wide range)
     candidateQueries = [
-      `country:IT AND ${upcomingDateClause} AND (${genreClause})`,
-      `country:IT AND ${upcomingDateClause}`,
-      `${upcomingDateClause} AND (${genreClause})`,
-    ];
-  } else if (artistClause || textClause) {
-    // Normal: artist or text search
-    candidateQueries = [
-      `country:IT AND ${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")} AND (${genreClause})`,
-      `country:IT AND ${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
-      `${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
+      `country:IT AND ${dateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")} AND (${genreClause})`,
+      `country:IT AND ${dateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
+      `${dateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
     ];
   } else {
-    // Genre-only search
+    // Genre-only or pure pre-order discovery: apply chosen date filter
     candidateQueries = [
-      `country:IT AND ${baseDateClause} AND (${genreClause})`,
-      `country:IT AND ${baseDateClause}`,
-      `${baseDateClause} AND (${genreClause})`,
+      `country:IT AND ${dateClause} AND (${genreClause})`,
+      `country:IT AND ${dateClause}`,
+      `${dateClause} AND (${genreClause})`,
     ];
   }
 
