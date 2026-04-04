@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Genre, Vinyl, CONDITIONS, CONDITION_LABELS } from "@/lib/types";
-import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3 } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import AdminLogin from "@/components/AdminLogin";
 import ImageUpload from "@/components/ImageUpload";
@@ -62,7 +62,7 @@ const ORDER_STATUS_COLORS: Record<string, string> = {
 
 export default function AdminPage() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const [tab, setTab] = useState<"vinyls" | "orders">("vinyls");
+  const [tab, setTab] = useState<"vinyls" | "sold" | "orders">("vinyls");
   const [vinyls, setVinyls] = useState<Vinyl[]>([]);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -257,7 +257,7 @@ export default function AdminPage() {
             <p className="text-zinc-500 mt-1">Accesso come <span className="font-medium text-zinc-700">{user.email}</span></p>
           </div>
           <div className="flex items-center gap-3">
-            {tab === "vinyls" && (
+            {(tab === "vinyls" || tab === "sold") && (
               <button
                 onClick={openNew}
                 className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-zinc-900 font-semibold px-5 py-3 rounded-xl transition-colors"
@@ -287,7 +287,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
           <button
             onClick={() => setTab("vinyls")}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
@@ -295,7 +295,30 @@ export default function AdminPage() {
             }`}
           >
             <Disc3 className="w-4 h-4" />
-            Vinili
+            In vendita
+            {!loading && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                tab === "vinyls" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"
+              }`}>
+                {vinyls.filter((v) => v.available).length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setTab("sold")}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+              tab === "sold" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+            }`}
+          >
+            <PackageCheck className="w-4 h-4" />
+            Venduti
+            {!loading && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                tab === "sold" ? "bg-white/20 text-white" : "bg-zinc-100 text-zinc-600"
+              }`}>
+                {vinyls.filter((v) => !v.available).length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setTab("orders")}
@@ -493,14 +516,14 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Vinyl list */}
+        {/* Vinyl list — solo disponibili */}
         {tab === "vinyls" && (loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
           </div>
-        ) : vinyls.length === 0 ? (
+        ) : vinyls.filter((v) => v.available).length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-zinc-400 text-lg mb-4">Nessun vinile nel catalogo</p>
+            <p className="text-zinc-400 text-lg mb-4">Nessun vinile in vendita</p>
             <button onClick={openNew} className="text-amber-600 hover:text-amber-700 font-medium">
               Aggiungi il primo vinile
             </button>
@@ -516,12 +539,11 @@ export default function AdminPage() {
                     <th className="text-left px-6 py-4 text-sm font-semibold text-zinc-600 hidden sm:table-cell">Condizione</th>
                     <th className="text-left px-6 py-4 text-sm font-semibold text-zinc-600 hidden lg:table-cell">Anno</th>
                     <th className="text-left px-6 py-4 text-sm font-semibold text-zinc-600">Prezzo</th>
-                    <th className="text-left px-6 py-4 text-sm font-semibold text-zinc-600">Stato</th>
                     <th className="text-right px-6 py-4 text-sm font-semibold text-zinc-600">Azioni</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {vinyls.map((vinyl) => (
+                  {vinyls.filter((v) => v.available).map((vinyl) => (
                     <tr key={vinyl.id} className="border-b border-zinc-50 hover:bg-zinc-50/50">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -555,28 +577,109 @@ export default function AdminPage() {
                       <td className="px-6 py-4">
                         <span className="font-medium text-zinc-900">€{Number(vinyl.price).toFixed(2)}</span>
                       </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => toggleAvailability(vinyl)}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors bg-red-50 text-red-600 hover:bg-red-100"
+                          >
+                            Segna venduto
+                          </button>
+                          <button onClick={() => openEdit(vinyl)} className="text-zinc-400 hover:text-amber-600 transition-colors p-1">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleDelete(vinyl.id)} className="text-zinc-400 hover:text-red-500 transition-colors p-1">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+
+        {/* ===== TAB: VENDUTI ===== */}
+        {tab === "sold" && (loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+          </div>
+        ) : vinyls.filter((v) => !v.available).length === 0 ? (
+          <div className="text-center py-20">
+            <PackageCheck className="w-12 h-12 text-zinc-300 mx-auto mb-3" />
+            <p className="text-zinc-400 text-lg">Nessun vinile venduto</p>
+            <p className="text-zinc-400 text-sm mt-1">I vinili segnati come venduti appariranno qui</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-100">
+              <p className="text-sm text-zinc-500">
+                Se un vinile ti è stato restituito, clicca <strong className="text-green-700">Rimetti in vendita</strong> per riportarlo nel catalogo.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-zinc-100">
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-zinc-600">Vinile</th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-zinc-600 hidden md:table-cell">Genere</th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-zinc-600 hidden sm:table-cell">Condizione</th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-zinc-600">Prezzo</th>
+                    <th className="text-left px-6 py-4 text-sm font-semibold text-zinc-600 hidden lg:table-cell">Venduto il</th>
+                    <th className="text-right px-6 py-4 text-sm font-semibold text-zinc-600">Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vinyls.filter((v) => !v.available).map((vinyl) => (
+                    <tr key={vinyl.id} className="border-b border-zinc-50 hover:bg-zinc-50/50">
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${vinyl.available ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${vinyl.available ? "bg-green-500" : "bg-red-500"}`} />
-                          {vinyl.available ? "Disponibile" : "Venduto"}
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-100 flex-shrink-0 opacity-70">
+                            {vinyl.cover_url ? (
+                              <img src={vinyl.cover_url} alt="" className="w-full h-full object-cover grayscale" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-zinc-300 text-xs">N/A</div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-zinc-700 truncate">{vinyl.title}</p>
+                            <p className="text-sm text-zinc-400 truncate">{vinyl.artist}</p>
+                            {vinyl.is_signed && (
+                              <span className="inline-flex mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                AUTOGRAFATO
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 hidden md:table-cell">
+                        <span className="text-sm text-zinc-500">{vinyl.genres?.name || "—"}</span>
+                      </td>
+                      <td className="px-6 py-4 hidden sm:table-cell">
+                        <span className="text-sm text-zinc-500">{CONDITION_LABELS[vinyl.condition] || vinyl.condition}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-medium text-zinc-500">€{Number(vinyl.price).toFixed(2)}</span>
+                      </td>
+                      <td className="px-6 py-4 hidden lg:table-cell">
+                        <span className="text-sm text-zinc-400">
+                          {vinyl.updated_at
+                            ? new Date(vinyl.updated_at).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" })
+                            : "—"}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => toggleAvailability(vinyl)}
-                            className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                              vinyl.available
-                                ? "bg-red-50 text-red-600 hover:bg-red-100"
-                                : "bg-green-50 text-green-700 hover:bg-green-100"
-                            }`}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors bg-green-50 text-green-700 hover:bg-green-100"
                           >
-                            {vinyl.available ? "Segna venduto" : "Rimetti in vendita"}
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Rimetti in vendita
                           </button>
-                          <button onClick={() => openEdit(vinyl)} className="text-zinc-400 hover:text-amber-600 transition-colors p-1">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleDelete(vinyl.id)} className="text-zinc-400 hover:text-red-500 transition-colors p-1">
+                          <button onClick={() => handleDelete(vinyl.id)} className="text-zinc-400 hover:text-red-500 transition-colors p-1" title="Elimina definitivamente">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
