@@ -602,9 +602,17 @@ export default function AdminPage() {
       try {
         await syncVinylImages(editingId, extraImages);
       } catch (imageError) {
-        showMessage("error", "Errore aggiornamento foto: " + parseUnknownError(imageError));
-        setSaving(false);
-        return;
+        try {
+          await syncVinylImagesFallback(editingId, extraImages);
+        } catch (fallbackError) {
+          showMessage(
+            "error",
+            "Errore aggiornamento foto: " +
+              `${parseUnknownError(imageError)} | fallback: ${parseUnknownError(fallbackError)}`
+          );
+          setSaving(false);
+          return;
+        }
       }
       showMessage("success", "Vinile aggiornato!");
     } else {
@@ -626,9 +634,17 @@ export default function AdminPage() {
       try {
         await syncVinylImages(data.id, extraImages);
       } catch (imageError) {
-        showMessage("error", "Errore salvataggio foto: " + parseUnknownError(imageError));
-        setSaving(false);
-        return;
+        try {
+          await syncVinylImagesFallback(data.id, extraImages);
+        } catch (fallbackError) {
+          showMessage(
+            "error",
+            "Errore salvataggio foto: " +
+              `${parseUnknownError(imageError)} | fallback: ${parseUnknownError(fallbackError)}`
+          );
+          setSaving(false);
+          return;
+        }
       }
 
       let publishMessage = "Vinile aggiunto al catalogo!";
@@ -723,6 +739,24 @@ export default function AdminPage() {
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.success) {
       throw new Error(payload?.error || "Errore sincronizzazione immagini");
+    }
+  }
+
+  async function syncVinylImagesFallback(vinylId: string, images: string[]) {
+    const { error: deleteError } = await supabase.from("vinyl_images").delete().eq("vinyl_id", vinylId);
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    const normalized = images.map((img) => img.trim()).filter(Boolean);
+    if (normalized.length === 0) return;
+
+    const { error: insertError } = await supabase.from("vinyl_images").insert(
+      normalized.map((url, i) => ({ vinyl_id: vinylId, image_url: url, sort_order: i }))
+    );
+
+    if (insertError) {
+      throw insertError;
     }
   }
 
