@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
         watchedArtists: [],
         albumAlerts: [],
         setupRequired: true,
+        missingTables: ["watched_artists", "album_alerts"],
         warning: "Tabelle alert non trovate nel database. Esegui il bootstrap SQL per watched_artists e album_alerts.",
         code: watchedError.code || null,
       });
@@ -64,6 +65,7 @@ export async function GET(req: NextRequest) {
         watchedArtists: watchedArtists || [],
         albumAlerts: [],
         setupRequired: true,
+        missingTables: ["album_alerts"],
         warning: "Tabella album_alerts non trovata nel database. Esegui il bootstrap SQL.",
         code: alertsError.code || null,
       });

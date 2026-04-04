@@ -107,7 +107,9 @@ export default function AdminPage() {
   const [newArtistGenre, setNewArtistGenre] = useState("Pop");
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [alertsError, setAlertsError] = useState("");
+  const [alertsNotice, setAlertsNotice] = useState("");
   const [monitoringInProgress, setMonitoringInProgress] = useState(false);
+  const [alertsViewTab, setAlertsViewTab] = useState<"configured" | "received">("configured");
 
   function parseUnknownError(err: unknown): string {
     if (err instanceof Error) return err.message;
@@ -187,6 +189,7 @@ export default function AdminPage() {
   async function fetchAlertData() {
     setAlertsLoading(true);
     setAlertsError("");
+    setAlertsNotice("");
     try {
       const token = await getAdminToken();
       const res = await fetch("/api/admin/alerts", {
@@ -204,7 +207,7 @@ export default function AdminPage() {
       setWatchedArtists(payload.watchedArtists || []);
       setAlbumAlerts(payload.albumAlerts || []);
       if (payload.setupRequired && payload.warning) {
-        setAlertsError(String(payload.warning));
+        setAlertsNotice(String(payload.warning));
       }
     } catch (err) {
       setAlertsError(toAlertErrorMessage(err, "Errore caricamento alert"));
@@ -1657,13 +1660,33 @@ export default function AdminPage() {
         {/* ===== TAB: ALERT ALBUM ===== */}
         {tab === "alerts" && (
           <div className="space-y-6">
-            <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3">
-              <p className="text-sm font-semibold text-zinc-800">Sezione 1: Alert Impostati</p>
-              <p className="text-xs text-zinc-600 mt-1">Configura gli artisti da monitorare e avvia la scansione.</p>
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <div className="inline-flex gap-2 bg-zinc-100 rounded-xl p-1">
+                <button
+                  onClick={() => setAlertsViewTab("configured")}
+                  className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                    alertsViewTab === "configured"
+                      ? "bg-zinc-900 text-white"
+                      : "text-zinc-700 hover:bg-zinc-200"
+                  }`}
+                >
+                  Alert Impostati
+                </button>
+                <button
+                  onClick={() => setAlertsViewTab("received")}
+                  className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                    alertsViewTab === "received"
+                      ? "bg-zinc-900 text-white"
+                      : "text-zinc-700 hover:bg-zinc-200"
+                  }`}
+                >
+                  Alert Ricevuti
+                </button>
+              </div>
             </div>
 
             {/* Add Artist Section */}
-            <div className="bg-white rounded-2xl shadow-sm p-5">
+            {alertsViewTab === "configured" && <div className="bg-white rounded-2xl shadow-sm p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
                   <Bell className="w-5 h-5 text-amber-500" />
@@ -1718,7 +1741,13 @@ export default function AdminPage() {
                   Aggiungi
                 </button>
               </div>
-            </div>
+            </div>}
+
+            {alertsNotice && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-xl text-sm">
+                {alertsNotice}
+              </div>
+            )}
 
             {alertsError && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
@@ -1727,7 +1756,7 @@ export default function AdminPage() {
             )}
 
             {/* Watched Artists List */}
-            <div className="bg-white rounded-2xl shadow-sm p-5">
+            {alertsViewTab === "configured" && <div className="bg-white rounded-2xl shadow-sm p-5">
               <h3 className="text-base font-semibold text-zinc-900 mb-4">
                 Artisti Monitorati ({watchedArtists.length})
               </h3>
@@ -1764,15 +1793,14 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Album Alerts Notification */}
-            <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3">
-              <p className="text-sm font-semibold text-zinc-800">Sezione 2: Alert Ricevuti</p>
-              <p className="text-xs text-zinc-600 mt-1">Qui trovi gli album rilevati dal monitoraggio automatico o manuale.</p>
-            </div>
+            {alertsViewTab === "received" && <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3">
+              <p className="text-sm font-semibold text-zinc-800">Qui trovi gli album rilevati dal monitoraggio automatico o manuale.</p>
+            </div>}
 
-            <div className="bg-white rounded-2xl shadow-sm p-5">
+            {alertsViewTab === "received" && <div className="bg-white rounded-2xl shadow-sm p-5">
               <h3 className="text-base font-semibold text-zinc-900 mb-4 flex items-center gap-2">
                 <Bell className="w-4 h-4 text-red-500" />
                 Notifiche Album ({albumAlerts.length})
@@ -1883,7 +1911,7 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Info Alert */}
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
