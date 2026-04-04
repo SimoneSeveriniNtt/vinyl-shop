@@ -268,6 +268,7 @@ async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<Mus
   const { genreKey, artistFilter, textFilter } = options;
   const currentYear = new Date().getFullYear();
   const previousYear = currentYear - 1;
+  const nextYear = currentYear + 1;
   const genreTerms = GENRE_TERMS[genreKey] || GENRE_TERMS.rock;
   const genreClause = genreTerms.map((term) => `(release:${term} OR artist:${term} OR tag:${term})`).join(" OR ");
   const escapedArtist = escapeQueryValue(artistFilter);
@@ -277,7 +278,7 @@ async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<Mus
     ? `(release:\"${escapedText}\" OR artist:\"${escapedText}\" OR tag:${escapedText})`
     : "";
 
-  const baseDateClause = `date:[${previousYear}-01-01 TO ${currentYear}-12-31]`;
+  const baseDateClause = `date:[${previousYear}-01-01 TO ${nextYear}-12-31]`;
   const candidateQueries = artistClause || textClause
     ? [
         `country:IT AND ${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")} AND (${genreClause})`,
@@ -289,6 +290,14 @@ async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<Mus
         `country:IT AND ${baseDateClause}`,
         `${baseDateClause} AND (${genreClause})`,
       ];
+
+  if (artistClause) {
+    // Artist-direct fallback avoids missing releases when metadata lacks country/genre tags.
+    candidateQueries.push(
+      `artist:\"${escapedArtist}\" AND ${baseDateClause}`,
+      `artist:\"${escapedArtist}\"`
+    );
+  }
 
   async function runQuery(query: string, limit = 40): Promise<MusicBrainzRelease[]> {
     const url = `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(query)}&fmt=json&limit=${limit}`;
@@ -319,7 +328,7 @@ async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<Mus
       }
     }
 
-    if (merged.size >= 25) {
+    if (merged.size >= 60) {
       break;
     }
   }
