@@ -25,6 +25,11 @@ interface MarketRadarItem {
   recommendation: "Alta" | "Media" | "Bassa";
 }
 
+interface RadarQueryOptions {
+  genreKey: string;
+  artistFilter: string;
+}
+
 const GENRE_TERMS: Record<string, string[]> = {
   rock: ["rock", "alternative", "indie"],
   pop: ["pop", "cantautore", "italiano"],
@@ -110,18 +115,31 @@ function scoreRelease(release: MusicBrainzRelease): MarketRadarItem {
   };
 }
 
-async function fetchMusicBrainzReleases(genreKey: string): Promise<MusicBrainzRelease[]> {
+function escapeQueryValue(value: string): string {
+  return value.replace(/"/g, "\\\"").trim();
+}
+
+async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<MusicBrainzRelease[]> {
+  const { genreKey, artistFilter } = options;
   const currentYear = new Date().getFullYear();
   const previousYear = currentYear - 1;
   const genreTerms = GENRE_TERMS[genreKey] || GENRE_TERMS.rock;
   const genreClause = genreTerms.map((term) => `(release:${term} OR artist:${term} OR tag:${term})`).join(" OR ");
+  const escapedArtist = escapeQueryValue(artistFilter);
+  const artistClause = escapedArtist ? `artist:\"${escapedArtist}\"` : "";
 
   const baseDateClause = `date:[${previousYear}-01-01 TO ${currentYear}-12-31]`;
-  const candidateQueries = [
-    `country:IT AND ${baseDateClause} AND (${genreClause})`,
-    `country:IT AND ${baseDateClause}`,
-    `${baseDateClause} AND (${genreClause})`,
-  ];
+  const candidateQueries = artistClause
+    ? [
+        `country:IT AND ${baseDateClause} AND ${artistClause} AND (${genreClause})`,
+        `country:IT AND ${baseDateClause} AND ${artistClause}`,
+        `${baseDateClause} AND ${artistClause}`,
+      ]
+    : [
+        `country:IT AND ${baseDateClause} AND (${genreClause})`,
+        `country:IT AND ${baseDateClause}`,
+        `${baseDateClause} AND (${genreClause})`,
+      ];
 
   async function runQuery(query: string, limit = 40): Promise<MusicBrainzRelease[]> {
     const url = `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(query)}&fmt=json&limit=${limit}`;
@@ -183,19 +201,31 @@ export async function GET(req: NextRequest) {
     }
 
     const genre = req.nextUrl.searchParams.get("genre") || "rock";
-    const releases = await fetchMusicBrainzReleases(genre);
+    const artist = (req.nextUrl.searchParams.get("artist") || "").trim();
+    const page = Math.max(1, Number.parseInt(req.nextUrl.searchParams.get("page") || "1", 10) || 1);
+    const limit = Math.min(40, Math.max(5, Number.parseInt(req.nextUrl.searchParams.get("limit") || "20", 10) || 20));
+
+    const releases = await fetchMusicBrainzReleases({ genreKey: genre, artistFilter: artist });
 
     const ranked = releases
       .map(scoreRelease)
-      .sort((a, b) => b.opportunityScore - a.opportunityScore)
-      .slice(0, 20);
+      .sort((a, b) => b.opportunityScore - a.opportunityScore);
+
+    const start = (page - 1) * limit;
+    const items = ranked.slice(start, start + limit);
+    const hasMore = start + limit < ranked.length;
 
     return NextResponse.json({
       success: true,
       source: "MusicBrainz",
       genre,
+      artist,
+      page,
+      limit,
+      total: ranked.length,
+      hasMore,
       generatedAt: new Date().toISOString(),
-      items: ranked,
+      items,
       note: "Punteggio euristico: valida sempre disponibilita reale e prezzo prima dell'acquisto.",
     });
   } catch (error) {

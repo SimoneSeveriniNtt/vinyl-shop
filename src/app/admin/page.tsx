@@ -87,9 +87,15 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [radarItems, setRadarItems] = useState<MarketRadarItem[]>([]);
   const [radarGenre, setRadarGenre] = useState("rock");
+  const [radarArtistInput, setRadarArtistInput] = useState("");
+  const [radarArtistFilter, setRadarArtistFilter] = useState("");
   const [radarLoading, setRadarLoading] = useState(false);
+  const [radarLoadingMore, setRadarLoadingMore] = useState(false);
   const [radarError, setRadarError] = useState("");
   const [radarAutoFetched, setRadarAutoFetched] = useState(false);
+  const [radarPage, setRadarPage] = useState(1);
+  const [radarHasMore, setRadarHasMore] = useState(false);
+  const [radarTotal, setRadarTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -117,9 +123,13 @@ export default function AdminPage() {
     if (data) setOrders(data as OrderRow[]);
   }
 
-  const fetchMarketRadar = useCallback(async () => {
-    setRadarLoading(true);
-    setRadarError("");
+  const fetchMarketRadar = useCallback(async (page = 1, append = false) => {
+    if (append) {
+      setRadarLoadingMore(true);
+    } else {
+      setRadarLoading(true);
+      setRadarError("");
+    }
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -129,7 +139,17 @@ export default function AdminPage() {
         throw new Error("Sessione admin non valida. Ricarica la pagina e rifai login.");
       }
 
-      const res = await fetch(`/api/admin/market-radar?genre=${encodeURIComponent(radarGenre)}`, {
+      const params = new URLSearchParams({
+        genre: radarGenre,
+        page: String(page),
+        limit: "20",
+      });
+
+      if (radarArtistFilter.trim()) {
+        params.set("artist", radarArtistFilter.trim());
+      }
+
+      const res = await fetch(`/api/admin/market-radar?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -140,15 +160,23 @@ export default function AdminPage() {
         throw new Error(payload.error || "Errore caricamento radar");
       }
 
-      setRadarItems(payload.items || []);
+      const incomingItems = payload.items || [];
+      setRadarItems((prev) => (append ? [...prev, ...incomingItems] : incomingItems));
+      setRadarPage(payload.page || page);
+      setRadarHasMore(Boolean(payload.hasMore));
+      setRadarTotal(payload.total || 0);
     } catch (error) {
       setRadarError(error instanceof Error ? error.message : "Errore caricamento radar");
-      setRadarItems([]);
+      if (!append) {
+        setRadarItems([]);
+      }
+      setRadarHasMore(false);
     } finally {
       setRadarAutoFetched(true);
       setRadarLoading(false);
+      setRadarLoadingMore(false);
     }
-  }, [radarGenre]);
+  }, [radarGenre, radarArtistFilter]);
 
   useEffect(() => {
     if (!user) return;
@@ -163,7 +191,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (tab === "radar" && !radarAutoFetched && !radarLoading) {
-      void fetchMarketRadar();
+      void fetchMarketRadar(1, false);
     }
   }, [tab, radarAutoFetched, radarLoading, fetchMarketRadar]);
 
@@ -171,7 +199,14 @@ export default function AdminPage() {
     setRadarAutoFetched(false);
     setRadarError("");
     setRadarItems([]);
-  }, [radarGenre]);
+    setRadarPage(1);
+    setRadarHasMore(false);
+    setRadarTotal(0);
+  }, [radarGenre, radarArtistFilter]);
+
+  function applyRadarArtistFilter() {
+    setRadarArtistFilter(radarArtistInput.trim());
+  }
 
   function radarBadgeClass(score: number): string {
     if (score >= 75) return "bg-green-100 text-green-700";
@@ -1060,8 +1095,27 @@ export default function AdminPage() {
                     <option value="elettronica">Elettronica</option>
                     <option value="colonne">Colonne Sonore</option>
                   </select>
+                  <input
+                    type="text"
+                    value={radarArtistInput}
+                    onChange={(e) => setRadarArtistInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        applyRadarArtistFilter();
+                      }
+                    }}
+                    placeholder="Filtra per artista (es. Mina, Calibro 35)"
+                    className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none w-full sm:w-72"
+                  />
                   <button
-                    onClick={fetchMarketRadar}
+                    onClick={applyRadarArtistFilter}
+                    className="inline-flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                  >
+                    Cerca artista
+                  </button>
+                  <button
+                    onClick={() => void fetchMarketRadar(1, false)}
                     disabled={radarLoading}
                     className="inline-flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                   >
@@ -1088,6 +1142,10 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="space-y-3">
+                <p className="text-xs text-zinc-500">
+                  {radarTotal > 0 ? `Risultati trovati: ${radarTotal}` : "Nessun risultato"}
+                  {radarArtistFilter ? ` • filtro artista: ${radarArtistFilter}` : ""}
+                </p>
                 {radarItems.map((item) => (
                   <div key={item.id} className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -1132,6 +1190,18 @@ export default function AdminPage() {
                     </a>
                   </div>
                 ))}
+                {radarHasMore && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => void fetchMarketRadar(radarPage + 1, true)}
+                      disabled={radarLoadingMore}
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-300 text-zinc-900 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                    >
+                      {radarLoadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      Carica altri risultati
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>
