@@ -91,14 +91,11 @@ export default function AdminPage() {
   const [vinyls, setVinyls] = useState<Vinyl[]>([]);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [radarItems, setRadarItems] = useState<MarketRadarItem[]>([]);
-  const [radarGenre, setRadarGenre] = useState("rock");
+  const [radarItems, setRadarItems] = useState<any[]>([]);
   const [radarArtistInput, setRadarArtistInput] = useState("");
   const [radarArtistFilter, setRadarArtistFilter] = useState("");
-  const [radarQueryInput, setRadarQueryInput] = useState("");
-  const [radarQueryFilter, setRadarQueryFilter] = useState("");
-  const [radarMinScore, setRadarMinScore] = useState(0);
-  const [radarUpcomingOnly, setRadarUpcomingOnly] = useState(false);
+  const [radarAlbumInput, setRadarAlbumInput] = useState("");
+  const [radarMinRarity, setRadarMinRarity] = useState(0);
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarLoadingMore, setRadarLoadingMore] = useState(false);
   const [radarError, setRadarError] = useState("");
@@ -133,7 +130,7 @@ export default function AdminPage() {
     if (data) setOrders(data as OrderRow[]);
   }
 
-  const fetchMarketRadar = useCallback(async (page = 1, append = false) => {
+  const fetchDiscogsRadar = useCallback(async (page = 1, append = false) => {
     if (append) {
       setRadarLoadingMore(true);
     } else {
@@ -149,26 +146,24 @@ export default function AdminPage() {
         throw new Error("Sessione admin non valida. Ricarica la pagina e rifai login.");
       }
 
+      if (!radarArtistFilter.trim()) {
+        throw new Error("Inserisci il nome dell'artista");
+      }
+
       const params = new URLSearchParams({
-        genre: radarGenre,
+        artist: radarArtistFilter.trim(),
         page: String(page),
         limit: "20",
       });
 
-      if (radarArtistFilter.trim()) {
-        params.set("artist", radarArtistFilter.trim());
+      if (radarAlbumInput.trim()) {
+        params.set("album", radarAlbumInput.trim());
       }
-      if (radarQueryFilter.trim()) {
-        params.set("q", radarQueryFilter.trim());
-      }
-      if (radarMinScore > 0) {
-        params.set("minScore", String(radarMinScore));
-      }
-      if (radarUpcomingOnly) {
-        params.set("upcomingOnly", "1");
+      if (radarMinRarity > 0) {
+        params.set("minRarity", String(radarMinRarity));
       }
 
-      const res = await fetch(`/api/admin/market-radar?${params.toString()}`, {
+      const res = await fetch(`/api/admin/discogs-radar?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -176,7 +171,7 @@ export default function AdminPage() {
 
       const payload = await res.json();
       if (!res.ok || !payload.success) {
-        throw new Error(payload.error || "Errore caricamento radar");
+        throw new Error(payload.error || "Errore caricamento Discogs");
       }
 
       const incomingItems = payload.items || [];
@@ -185,7 +180,7 @@ export default function AdminPage() {
       setRadarHasMore(Boolean(payload.hasMore));
       setRadarTotal(payload.total || 0);
     } catch (error) {
-      setRadarError(error instanceof Error ? error.message : "Errore caricamento radar");
+      setRadarError(error instanceof Error ? error.message : "Errore caricamento Discogs");
       if (!append) {
         setRadarItems([]);
       }
@@ -195,7 +190,7 @@ export default function AdminPage() {
       setRadarLoading(false);
       setRadarLoadingMore(false);
     }
-  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore, radarUpcomingOnly]);
+  }, [radarArtistFilter, radarAlbumInput, radarMinRarity]);
 
   useEffect(() => {
     if (!user) return;
@@ -209,17 +204,17 @@ export default function AdminPage() {
   }, [user]);
 
   useEffect(() => {
-    if (tab === "radar" && !radarAutoFetched && !radarLoading) {
-      void fetchMarketRadar(1, false);
+    if (tab === "radar" && !radarAutoFetched && !radarLoading && radarArtistFilter) {
+      void fetchDiscogsRadar(1, false);
     }
-  }, [tab, radarAutoFetched, radarLoading, fetchMarketRadar]);
+  }, [tab, radarAutoFetched, radarLoading, fetchDiscogsRadar, radarArtistFilter]);
 
   // Auto-refetch when any filter changes (only after initial load)
   useEffect(() => {
-    if (tab === "radar" && radarAutoFetched) {
-      void fetchMarketRadar(1, false);
+    if (tab === "radar" && radarAutoFetched && radarArtistFilter) {
+      void fetchDiscogsRadar(1, false);
     }
-  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore, radarUpcomingOnly, tab, radarAutoFetched, fetchMarketRadar]);
+  }, [radarArtistFilter, radarAlbumInput, radarMinRarity, tab, radarAutoFetched, fetchDiscogsRadar]);
 
   useEffect(() => {
     setRadarAutoFetched(false);
@@ -228,20 +223,25 @@ export default function AdminPage() {
     setRadarPage(1);
     setRadarHasMore(false);
     setRadarTotal(0);
-  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore, radarUpcomingOnly]);
+  }, [radarArtistFilter, radarAlbumInput, radarMinRarity]);
 
-  function applyRadarArtistFilter() {
+  function applyRadarSearch() {
     setRadarArtistFilter(radarArtistInput.trim());
   }
 
-  function applyRadarTextFilter() {
-    setRadarQueryFilter(radarQueryInput.trim());
-  }
-
-  function radarBadgeClass(score: number): string {
-    if (score >= 75) return "bg-green-100 text-green-700";
-    if (score >= 55) return "bg-amber-100 text-amber-700";
-    return "bg-zinc-100 text-zinc-600";
+  function radarRarityBadge(rarity: string): string {
+    switch (rarity) {
+      case "Collectible":
+        return "bg-red-100 text-red-700";
+      case "Very Rare":
+        return "bg-orange-100 text-orange-700";
+      case "Rare":
+        return "bg-amber-100 text-amber-700";
+      case "Uncommon":
+        return "bg-blue-100 text-blue-700";
+      default:
+        return "bg-zinc-100 text-zinc-600";
+    }
   }
 
   async function updateOrderStatus(id: string, status: string) {
@@ -1107,10 +1107,10 @@ export default function AdminPage() {
                 <div className="mb-5">
                   <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-amber-500" />
-                    Radar Opportunita Vinili Italia
+                    Discogs Vinyl Rarity Radar
                   </h2>
                   <p className="text-sm text-zinc-500 mt-1">
-                    Classifica automatica nuove uscite e possibili rarita per aiutarti negli acquisti di rivendita.
+                    Scopri edizioni rare, varianti colorate e vinili collezionabili su Discogs
                   </p>
                 </div>
 
@@ -1125,23 +1125,24 @@ export default function AdminPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
-                          applyRadarArtistFilter();
+                          applyRadarSearch();
                         }
                       }}
-                      placeholder="Artista (es. Madame, Sayf)"
+                      placeholder="Artista *"
                       className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                      required
                     />
                     <input
                       type="text"
-                      value={radarQueryInput}
-                      onChange={(e) => setRadarQueryInput(e.target.value)}
+                      value={radarAlbumInput}
+                      onChange={(e) => setRadarAlbumInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
-                          applyRadarTextFilter();
+                          applyRadarSearch();
                         }
                       }}
-                      placeholder="Titolo / Keyword (es. pre order)"
+                      placeholder="Album (opzionale)"
                       className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
                     />
                   </div>
@@ -1150,46 +1151,33 @@ export default function AdminPage() {
                 {/* FILTRI Section */}
                 <div className="mb-5">
                   <p className="text-xs font-semibold uppercase text-zinc-600 mb-3 tracking-wide">Filtri</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    <select
-                      value={radarGenre}
-                      onChange={(e) => setRadarGenre(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                    >
-                      <option value="rock">Genere: Rock</option>
-                      <option value="pop">Genere: Pop Italiano</option>
-                      <option value="jazz">Genere: Jazz</option>
-                      <option value="hiphop">Genere: Hip Hop / Rap</option>
-                      <option value="elettronica">Genere: Elettronica</option>
-                      <option value="colonne">Genere: Colonne Sonore</option>
-                    </select>
-                    <select
-                      value={radarMinScore}
-                      onChange={(e) => setRadarMinScore(Number(e.target.value))}
-                      className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                    >
-                      <option value={0}>Score: qualsiasi</option>
-                      <option value={50}>Score: 50+</option>
-                      <option value={65}>Score: 65+</option>
-                      <option value={75}>Score: 75+</option>
-                      <option value={85}>Score: 85+</option>
-                    </select>
-                    <label className="col-span-1 sm:col-span-2 lg:col-span-1 flex items-center gap-2 px-4 py-2.5 border border-zinc-200 rounded-xl bg-white hover:bg-zinc-50 cursor-pointer transition-colors">
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-zinc-700 block mb-2">
+                        Rarità minima: {radarMinRarity > 0 ? radarMinRarity : "Qualsiasi"}
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={radarUpcomingOnly}
-                        onChange={(e) => setRadarUpcomingOnly(e.target.checked)}
-                        className="w-4 h-4 rounded border-zinc-300 text-amber-500 focus:ring-amber-400"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={radarMinRarity}
+                        onChange={(e) => setRadarMinRarity(Number(e.target.value))}
+                        className="w-full h-2 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
                       />
-                      <span className="text-sm text-zinc-700 font-medium">Uscite prossime</span>
-                    </label>
+                      <div className="flex justify-between text-xs text-zinc-500 mt-1">
+                        <span>Common (0)</span>
+                        <span>Rare (50)</span>
+                        <span>Collectible (100)</span>
+                      </div>
+                    </div>
                     <button
-                      onClick={() => void fetchMarketRadar(1, false)}
-                      disabled={radarLoading}
-                      className="col-span-1 sm:col-span-2 lg:col-span-1 inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                      onClick={() => void fetchDiscogsRadar(1, false)}
+                      disabled={radarLoading || !radarArtistFilter.trim()}
+                      className="w-full inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                     >
                       {radarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
-                      Cerca
+                      Cerca su Discogs
                     </button>
                   </div>
                 </div>
@@ -1208,105 +1196,97 @@ export default function AdminPage() {
               </div>
             ) : radarItems.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
-                <p className="text-zinc-500">Nessun risultato disponibile per questa ricerca.</p>
+                <p className="text-zinc-500">Nessun risultato su Discogs per questa ricerca.</p>
               </div>
             ) : (
               <div className="space-y-3">
                 <p className="text-xs text-zinc-500">
                   {radarTotal > 0 ? `Risultati trovati: ${radarTotal}` : "Nessun risultato"}
                   {radarArtistFilter ? ` • artista: ${radarArtistFilter}` : ""}
-                  {radarQueryFilter ? ` • keyword: ${radarQueryFilter}` : ""}
-                  {radarMinScore > 0 ? ` • score >= ${radarMinScore}` : ""}
-                  {radarUpcomingOnly ? " • solo in uscita/pre-order" : ""}
+                  {radarAlbumInput ? ` • album: ${radarAlbumInput}` : ""}
+                  {radarMinRarity > 0 ? ` • rarità >= ${radarMinRarity}` : ""}
                 </p>
                 {radarItems.map((item) => (
                   <div key={item.id} className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-base font-semibold text-zinc-900 truncate">{item.title}</p>
-                        <p className="text-sm text-zinc-500 truncate">{item.artist}</p>
-                        {item.editionType && (
-                          <p className="text-xs text-zinc-600 mt-1 truncate">{item.editionType}</p>
-                        )}
-                        <div className="flex flex-wrap gap-2 mt-2 text-xs text-zinc-500">
-                          <span className="bg-zinc-100 px-2 py-1 rounded-full">Data: {item.releaseDate || "N/D"}</span>
-                          <span className="bg-zinc-100 px-2 py-1 rounded-full">Paese: {item.country}</span>
-                          <span className={`px-2 py-1 rounded-full ${item.source === "Market Intel" ? "bg-blue-100 text-blue-700" : "bg-zinc-100 text-zinc-700"}`}>
-                            Fonte: {item.source}
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      {/* Image */}
+                      {item.images && item.images.length > 0 && (
+                        <div className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-100">
+                          <img
+                            src={item.images[0].uri150}
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-base font-semibold text-zinc-900 truncate">{item.title}</p>
+                            <p className="text-sm text-zinc-500 truncate">{item.artist}</p>
+                            {item.releaseYear && (
+                              <p className="text-xs text-zinc-500">Anno: {item.releaseYear}</p>
+                            )}
+                          </div>
+                          <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${radarRarityBadge(item.estimated_rarity)}`}>
+                            {item.estimated_rarity}
                           </span>
-                          <span className={`px-2 py-1 rounded-full ${
-                            item.releaseStatus === "Pre-order"
-                              ? "bg-blue-100 text-blue-700"
-                              : item.releaseStatus === "In uscita"
-                              ? "bg-purple-100 text-purple-700"
-                              : item.releaseStatus === "Uscito"
-                              ? "bg-zinc-100 text-zinc-700"
-                              : "bg-zinc-100 text-zinc-500"
-                          }`}>
-                            Stato: {item.releaseStatus}
-                          </span>
-                          {item.daysToRelease !== null && item.daysToRelease > 0 && (
-                            <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-                              Esce tra {item.daysToRelease} giorni
-                            </span>
+                        </div>
+
+                        {/* Format & Details */}
+                        <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                          {item.format && <span className="bg-zinc-100 px-2 py-1 rounded-full">{item.format}</span>}
+                          {item.formatDetails.length > 0 && (
+                            <span className="bg-zinc-100 px-2 py-1 rounded-full">{item.formatDetails.slice(0, 2).join(", ")}</span>
+                          )}
+                          {item.country && <span className="bg-zinc-100 px-2 py-1 rounded-full">{item.country}</span>}
+                          {item.genres.length > 0 && (
+                            <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">{item.genres[0]}</span>
+                          )}
+                          {item.catalogNumber && (
+                            <span className="bg-zinc-100 px-2 py-1 rounded-full">Cat: {item.catalogNumber}</span>
                           )}
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 sm:flex-col sm:items-end">
-                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${radarBadgeClass(item.opportunityScore)}`}>
-                          Score {item.opportunityScore}/100
-                        </span>
-                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${item.recommendation === "Alta" ? "bg-green-100 text-green-700" : item.recommendation === "Media" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600"}`}>
-                          Priorita {item.recommendation}
-                        </span>
-                      </div>
-                    </div>
 
-                    {item.raritySignals.length > 0 ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {item.raritySignals.map((signal) => (
-                          <span key={signal} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-full">
-                            {signal}
+                        {/* Rarity Signals */}
+                        {item.rarity_signals.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {item.rarity_signals.map((signal: any) => (
+                              <span
+                                key={signal.type}
+                                className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full"
+                              >
+                                ✨ {signal.description}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Scores & Links */}
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className="text-xs font-semibold text-zinc-700">
+                            Rarità: <span className="text-amber-600">{item.rarity_score}/100</span>
                           </span>
-                        ))}
-                        <span className={`text-xs px-2 py-1 rounded-full border ${
-                          item.rarityConfidence === "Alta"
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : item.rarityConfidence === "Media"
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : "bg-zinc-50 text-zinc-600 border-zinc-200"
-                        }`}>
-                          Affidabilita segnali: {item.rarityConfidence}
-                        </span>
+                          <a
+                            href={item.discogs_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-semibold ml-auto"
+                          >
+                            Apri Discogs
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
                       </div>
-                    ) : (
-                      <p className="mt-3 text-xs text-zinc-400">Nessun segnale forte di rarita nel titolo/edizione.</p>
-                    )}
-
-                    <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                      <p className="text-xs font-semibold text-zinc-700 mb-1">Checklist verifica rarita</p>
-                      <ul className="space-y-1">
-                        {item.rarityChecklist.map((check) => (
-                          <li key={check} className="text-xs text-zinc-600">- {check}</li>
-                        ))}
-                      </ul>
                     </div>
-
-                    <a
-                      href={`https://musicbrainz.org/release/${item.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-semibold mt-3"
-                    >
-                      Apri fonte release
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
                   </div>
                 ))}
                 {radarHasMore && (
                   <div className="pt-2">
                     <button
-                      onClick={() => void fetchMarketRadar(radarPage + 1, true)}
+                      onClick={() => void fetchDiscogsRadar(radarPage + 1, true)}
                       disabled={radarLoadingMore}
                       className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-300 text-zinc-900 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                     >
