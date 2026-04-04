@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Genre, Vinyl, CONDITIONS, CONDITION_LABELS } from "@/lib/types";
-import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import AdminLogin from "@/components/AdminLogin";
 import ImageUpload from "@/components/ImageUpload";
@@ -52,6 +52,17 @@ interface OrderRow {
   order_items: { quantity: number; price_at_purchase: number; vinyls: { title: string; artist: string } | null }[];
 }
 
+interface MarketRadarItem {
+  id: string;
+  title: string;
+  artist: string;
+  releaseDate: string | null;
+  country: string;
+  raritySignals: string[];
+  opportunityScore: number;
+  recommendation: "Alta" | "Media" | "Bassa";
+}
+
 const ORDER_STATUS_LABELS: Record<string, string> = {
   pending:   "In attesa",
   confirmed: "Confermato",
@@ -70,10 +81,14 @@ const ORDER_STATUS_COLORS: Record<string, string> = {
 
 export default function AdminPage() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const [tab, setTab] = useState<"vinyls" | "sold" | "orders">("vinyls");
+  const [tab, setTab] = useState<"vinyls" | "sold" | "orders" | "radar">("vinyls");
   const [vinyls, setVinyls] = useState<Vinyl[]>([]);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [radarItems, setRadarItems] = useState<MarketRadarItem[]>([]);
+  const [radarGenre, setRadarGenre] = useState("rock");
+  const [radarLoading, setRadarLoading] = useState(false);
+  const [radarError, setRadarError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -101,6 +116,38 @@ export default function AdminPage() {
     if (data) setOrders(data as OrderRow[]);
   }
 
+  const fetchMarketRadar = useCallback(async () => {
+    setRadarLoading(true);
+    setRadarError("");
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      if (!token) {
+        throw new Error("Sessione admin non valida. Ricarica la pagina e rifai login.");
+      }
+
+      const res = await fetch(`/api/admin/market-radar?genre=${encodeURIComponent(radarGenre)}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = await res.json();
+      if (!res.ok || !payload.success) {
+        throw new Error(payload.error || "Errore caricamento radar");
+      }
+
+      setRadarItems(payload.items || []);
+    } catch (error) {
+      setRadarError(error instanceof Error ? error.message : "Errore caricamento radar");
+      setRadarItems([]);
+    } finally {
+      setRadarLoading(false);
+    }
+  }, [radarGenre]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -111,6 +158,18 @@ export default function AdminPage() {
 
     return () => clearTimeout(timer);
   }, [user]);
+
+  useEffect(() => {
+    if (tab === "radar" && radarItems.length === 0 && !radarLoading) {
+      void fetchMarketRadar();
+    }
+  }, [tab, radarItems.length, radarLoading, fetchMarketRadar]);
+
+  function radarBadgeClass(score: number): string {
+    if (score >= 75) return "bg-green-100 text-green-700";
+    if (score >= 55) return "bg-amber-100 text-amber-700";
+    return "bg-zinc-100 text-zinc-600";
+  }
 
   async function updateOrderStatus(id: string, status: string) {
     await supabase.from("orders").update({ status }).eq("id", id);
@@ -385,6 +444,15 @@ export default function AdminPage() {
           >
             <ShoppingBag className="w-4 h-4" />
             Ordini
+          </button>
+          <button
+            onClick={() => setTab("radar")}
+            className={`col-span-2 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-colors sm:col-span-1 ${
+              tab === "radar" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+            }`}
+          >
+            <Radar className="w-4 h-4" />
+            Radar Acquisti
           </button>
         </div>
 
@@ -951,6 +1019,109 @@ export default function AdminPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === "radar" && (
+          <>
+            <div className="bg-white rounded-2xl shadow-sm p-5 mb-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-500" />
+                    Radar Opportunita Vinili Italia
+                  </h2>
+                  <p className="text-sm text-zinc-500 mt-1">
+                    Classifica automatica nuove uscite e possibili rarita per aiutarti negli acquisti di rivendita.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                  <select
+                    value={radarGenre}
+                    onChange={(e) => setRadarGenre(e.target.value)}
+                    className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                  >
+                    <option value="rock">Rock</option>
+                    <option value="pop">Pop Italiano</option>
+                    <option value="jazz">Jazz</option>
+                    <option value="hiphop">Hip Hop / Rap</option>
+                    <option value="elettronica">Elettronica</option>
+                    <option value="colonne">Colonne Sonore</option>
+                  </select>
+                  <button
+                    onClick={fetchMarketRadar}
+                    disabled={radarLoading}
+                    className="inline-flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                  >
+                    {radarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
+                    Aggiorna ricerca
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {radarError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-5 text-sm">
+                {radarError}
+              </div>
+            )}
+
+            {radarLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+              </div>
+            ) : radarItems.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
+                <p className="text-zinc-500">Nessun risultato disponibile per questa categoria.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {radarItems.map((item) => (
+                  <div key={item.id} className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-base font-semibold text-zinc-900 truncate">{item.title}</p>
+                        <p className="text-sm text-zinc-500 truncate">{item.artist}</p>
+                        <div className="flex flex-wrap gap-2 mt-2 text-xs text-zinc-500">
+                          <span className="bg-zinc-100 px-2 py-1 rounded-full">Data: {item.releaseDate || "N/D"}</span>
+                          <span className="bg-zinc-100 px-2 py-1 rounded-full">Paese: {item.country}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 sm:flex-col sm:items-end">
+                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${radarBadgeClass(item.opportunityScore)}`}>
+                          Score {item.opportunityScore}/100
+                        </span>
+                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${item.recommendation === "Alta" ? "bg-green-100 text-green-700" : item.recommendation === "Media" ? "bg-amber-100 text-amber-700" : "bg-zinc-100 text-zinc-600"}`}>
+                          Priorita {item.recommendation}
+                        </span>
+                      </div>
+                    </div>
+
+                    {item.raritySignals.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {item.raritySignals.map((signal) => (
+                          <span key={signal} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-full">
+                            {signal}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-zinc-400">Nessun segnale forte di rarita nel titolo/edizione.</p>
+                    )}
+
+                    <a
+                      href={`https://musicbrainz.org/release/${item.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-800 font-semibold mt-3"
+                    >
+                      Apri fonte release
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 ))}
               </div>
