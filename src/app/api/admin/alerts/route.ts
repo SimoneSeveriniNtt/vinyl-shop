@@ -33,18 +33,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Non autorizzato" }, { status: 401 });
     }
 
-    const [{ data: watchedArtists, error: watchedError }, { data: albumAlerts, error: alertsError }] =
+    const { searchParams } = new URL(req.url);
+    const searchArtist = (searchParams.get("search") || "").trim();
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const perPage = Math.min(100, Math.max(1, parseInt(searchParams.get("per_page") || "20", 10)));
+    const offset = (page - 1) * perPage;
+
+    let alertsQuery = supabase
+      .from("album_alerts")
+      .select("*", { count: "exact" })
+      .order("discovered_at", { ascending: false })
+      .range(offset, offset + perPage - 1);
+
+    if (searchArtist) {
+      alertsQuery = alertsQuery.ilike("artist_name", `%${searchArtist}%`);
+    }
+
+    const [{ data: watchedArtists, error: watchedError }, { data: albumAlerts, error: alertsError, count: alertsTotal }] =
       await Promise.all([
         supabase
           .from("watched_artists")
           .select("*")
           .eq("is_active", true)
           .order("added_at", { ascending: false }),
-        supabase
-          .from("album_alerts")
-          .select("*")
-          .order("discovered_at", { ascending: false })
-          .limit(50),
+        alertsQuery,
       ]);
 
     if (watchedError && isMissingTableError(watchedError.code)) {
@@ -99,6 +111,12 @@ export async function GET(req: NextRequest) {
       success: true,
       watchedArtists: watchedArtists || [],
       albumAlerts: albumAlerts || [],
+      alertsPagination: {
+        total: alertsTotal ?? 0,
+        page,
+        perPage,
+        totalPages: Math.ceil((alertsTotal ?? 0) / perPage),
+      },
     });
   } catch (error) {
     return NextResponse.json(

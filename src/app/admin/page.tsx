@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Genre, Vinyl, CONDITIONS, formatCondition, getConditionLabel, getConditionQuality, isConditionSealed } from "@/lib/types";
-import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink, Bell, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink, Bell, Check, Search } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import AdminLogin from "@/components/AdminLogin";
 import ImageUpload from "@/components/ImageUpload";
@@ -138,6 +138,11 @@ export default function AdminPage() {
   const [alertsViewTab, setAlertsViewTab] = useState<"configured" | "received">("configured");
   const [watchedArtistsSearch, setWatchedArtistsSearch] = useState("");
   const [watchedArtistsPage, setWatchedArtistsPage] = useState(1);
+  const [alertsSearch, setAlertsSearch] = useState("");
+  const [alertsPage, setAlertsPage] = useState(1);
+  const [alertsTotalPages, setAlertsTotalPages] = useState(1);
+  const [alertsTotal, setAlertsTotal] = useState(0);
+  const ALERTS_PER_PAGE = 20;
 
   function parseUnknownError(err: unknown): string {
     if (err instanceof Error) return err.message;
@@ -214,17 +219,22 @@ export default function AdminPage() {
     return token;
   }
 
-  async function fetchAlertData() {
+  async function fetchAlertData(opts?: { search?: string; page?: number }) {
     setAlertsLoading(true);
     setAlertsError("");
     setAlertsNotice("");
     try {
       const token = await getAdminToken();
-      const res = await fetch("/api/admin/alerts", {
+      const search = opts?.search !== undefined ? opts.search : alertsSearch;
+      const page = opts?.page ?? alertsPage;
+      const params = new URLSearchParams({
+        page: String(page),
+        per_page: String(ALERTS_PER_PAGE),
+      });
+      if (search) params.set("search", search);
+      const res = await fetch(`/api/admin/alerts?${params.toString()}`, {
         method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const payload = await res.json();
@@ -234,6 +244,10 @@ export default function AdminPage() {
 
       setWatchedArtists(payload.watchedArtists || []);
       setAlbumAlerts(payload.albumAlerts || []);
+      if (payload.alertsPagination) {
+        setAlertsTotal(payload.alertsPagination.total ?? 0);
+        setAlertsTotalPages(payload.alertsPagination.totalPages ?? 1);
+      }
       if (payload.setupRequired && payload.warning) {
         setAlertsNotice(String(payload.warning));
       }
@@ -2142,10 +2156,27 @@ export default function AdminPage() {
             </div>}
 
             {alertsViewTab === "received" && <div className="bg-white rounded-2xl shadow-sm p-5">
-              <h3 className="text-base font-semibold text-zinc-900 mb-4 flex items-center gap-2">
-                <Bell className="w-4 h-4 text-red-500" />
-                Notifiche Album ({albumAlerts.length})
-              </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <h3 className="text-base font-semibold text-zinc-900 flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-red-500" />
+                  Notifiche Album ({alertsTotal})
+                </h3>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Cerca artista…"
+                    value={alertsSearch}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setAlertsSearch(v);
+                      setAlertsPage(1);
+                      void fetchAlertData({ search: v, page: 1 });
+                    }}
+                    className="w-full pl-8 pr-3 py-2 text-sm bg-zinc-100 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition"
+                  />
+                </div>
+              </div>
 
               {alertsLoading && albumAlerts.length === 0 ? (
                 <div className="flex items-center justify-center py-8">
@@ -2154,8 +2185,10 @@ export default function AdminPage() {
               ) : albumAlerts.length === 0 ? (
                 <div className="text-center py-8">
                   <Bell className="w-12 h-12 text-zinc-300 mx-auto mb-3" />
-                  <p className="text-sm text-zinc-500">Nessun nuovo album rilevato ancora</p>
-                  <p className="text-xs text-zinc-400 mt-1">I nuovi album appariranno qui automaticamente</p>
+                  <p className="text-sm text-zinc-500">
+                    {alertsSearch ? `Nessun risultato per "${alertsSearch}"` : "Nessun nuovo album rilevato ancora"}
+                  </p>
+                  {!alertsSearch && <p className="text-xs text-zinc-400 mt-1">I nuovi album appariranno qui automaticamente</p>}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -2250,6 +2283,39 @@ export default function AdminPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Paginazione */}
+              {alertsTotalPages > 1 && (
+                <div className="flex items-center justify-between mt-5 pt-4 border-t border-zinc-100">
+                  <p className="text-xs text-zinc-500">
+                    Pagina {alertsPage} di {alertsTotalPages} · {alertsTotal} alert
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={alertsPage <= 1 || alertsLoading}
+                      onClick={() => {
+                        const p = alertsPage - 1;
+                        setAlertsPage(p);
+                        void fetchAlertData({ page: p });
+                      }}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    >
+                      ← Prec
+                    </button>
+                    <button
+                      disabled={alertsPage >= alertsTotalPages || alertsLoading}
+                      onClick={() => {
+                        const p = alertsPage + 1;
+                        setAlertsPage(p);
+                        void fetchAlertData({ page: p });
+                      }}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    >
+                      Succ →
+                    </button>
+                  </div>
                 </div>
               )}
             </div>}
