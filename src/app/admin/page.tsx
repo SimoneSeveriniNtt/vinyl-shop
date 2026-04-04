@@ -89,6 +89,9 @@ export default function AdminPage() {
   const [radarGenre, setRadarGenre] = useState("rock");
   const [radarArtistInput, setRadarArtistInput] = useState("");
   const [radarArtistFilter, setRadarArtistFilter] = useState("");
+  const [radarQueryInput, setRadarQueryInput] = useState("");
+  const [radarQueryFilter, setRadarQueryFilter] = useState("");
+  const [radarMinScore, setRadarMinScore] = useState(0);
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarLoadingMore, setRadarLoadingMore] = useState(false);
   const [radarError, setRadarError] = useState("");
@@ -148,6 +151,12 @@ export default function AdminPage() {
       if (radarArtistFilter.trim()) {
         params.set("artist", radarArtistFilter.trim());
       }
+      if (radarQueryFilter.trim()) {
+        params.set("q", radarQueryFilter.trim());
+      }
+      if (radarMinScore > 0) {
+        params.set("minScore", String(radarMinScore));
+      }
 
       const res = await fetch(`/api/admin/market-radar?${params.toString()}`, {
         headers: {
@@ -176,7 +185,7 @@ export default function AdminPage() {
       setRadarLoading(false);
       setRadarLoadingMore(false);
     }
-  }, [radarGenre, radarArtistFilter]);
+  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore]);
 
   useEffect(() => {
     if (!user) return;
@@ -202,10 +211,14 @@ export default function AdminPage() {
     setRadarPage(1);
     setRadarHasMore(false);
     setRadarTotal(0);
-  }, [radarGenre, radarArtistFilter]);
+  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore]);
 
   function applyRadarArtistFilter() {
     setRadarArtistFilter(radarArtistInput.trim());
+  }
+
+  function applyRadarTextFilter() {
+    setRadarQueryFilter(radarQueryInput.trim());
   }
 
   function radarBadgeClass(score: number): string {
@@ -1114,6 +1127,36 @@ export default function AdminPage() {
                   >
                     Cerca artista
                   </button>
+                  <input
+                    type="text"
+                    value={radarQueryInput}
+                    onChange={(e) => setRadarQueryInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        applyRadarTextFilter();
+                      }
+                    }}
+                    placeholder="Cerca titolo/keyword (es. hellvisback, pre order)"
+                    className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none w-full sm:w-80"
+                  />
+                  <button
+                    onClick={applyRadarTextFilter}
+                    className="inline-flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                  >
+                    Cerca keyword
+                  </button>
+                  <select
+                    value={radarMinScore}
+                    onChange={(e) => setRadarMinScore(Number(e.target.value))}
+                    className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                  >
+                    <option value={0}>Score minimo: nessuno</option>
+                    <option value={50}>Score minimo: 50+</option>
+                    <option value={65}>Score minimo: 65+</option>
+                    <option value={75}>Score minimo: 75+</option>
+                    <option value={85}>Score minimo: 85+</option>
+                  </select>
                   <button
                     onClick={() => void fetchMarketRadar(1, false)}
                     disabled={radarLoading}
@@ -1145,6 +1188,8 @@ export default function AdminPage() {
                 <p className="text-xs text-zinc-500">
                   {radarTotal > 0 ? `Risultati trovati: ${radarTotal}` : "Nessun risultato"}
                   {radarArtistFilter ? ` • filtro artista: ${radarArtistFilter}` : ""}
+                  {radarQueryFilter ? ` • keyword: ${radarQueryFilter}` : ""}
+                  {radarMinScore > 0 ? ` • score >= ${radarMinScore}` : ""}
                 </p>
                 {radarItems.map((item) => (
                   <div key={item.id} className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">

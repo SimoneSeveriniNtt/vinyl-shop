@@ -28,6 +28,7 @@ interface MarketRadarItem {
 interface RadarQueryOptions {
   genreKey: string;
   artistFilter: string;
+  textFilter: string;
 }
 
 const GENRE_TERMS: Record<string, string[]> = {
@@ -120,20 +121,24 @@ function escapeQueryValue(value: string): string {
 }
 
 async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<MusicBrainzRelease[]> {
-  const { genreKey, artistFilter } = options;
+  const { genreKey, artistFilter, textFilter } = options;
   const currentYear = new Date().getFullYear();
   const previousYear = currentYear - 1;
   const genreTerms = GENRE_TERMS[genreKey] || GENRE_TERMS.rock;
   const genreClause = genreTerms.map((term) => `(release:${term} OR artist:${term} OR tag:${term})`).join(" OR ");
   const escapedArtist = escapeQueryValue(artistFilter);
   const artistClause = escapedArtist ? `artist:\"${escapedArtist}\"` : "";
+  const escapedText = escapeQueryValue(textFilter);
+  const textClause = escapedText
+    ? `(release:\"${escapedText}\" OR artist:\"${escapedText}\" OR tag:${escapedText})`
+    : "";
 
   const baseDateClause = `date:[${previousYear}-01-01 TO ${currentYear}-12-31]`;
-  const candidateQueries = artistClause
+  const candidateQueries = artistClause || textClause
     ? [
-        `country:IT AND ${baseDateClause} AND ${artistClause} AND (${genreClause})`,
-        `country:IT AND ${baseDateClause} AND ${artistClause}`,
-        `${baseDateClause} AND ${artistClause}`,
+        `country:IT AND ${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")} AND (${genreClause})`,
+        `country:IT AND ${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
+        `${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
       ]
     : [
         `country:IT AND ${baseDateClause} AND (${genreClause})`,
@@ -202,27 +207,40 @@ export async function GET(req: NextRequest) {
 
     const genre = req.nextUrl.searchParams.get("genre") || "rock";
     const artist = (req.nextUrl.searchParams.get("artist") || "").trim();
+    const q = (req.nextUrl.searchParams.get("q") || "").trim();
+    const minScore = Math.max(0, Math.min(100, Number.parseInt(req.nextUrl.searchParams.get("minScore") || "0", 10) || 0));
     const page = Math.max(1, Number.parseInt(req.nextUrl.searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(40, Math.max(5, Number.parseInt(req.nextUrl.searchParams.get("limit") || "20", 10) || 20));
 
-    const releases = await fetchMusicBrainzReleases({ genreKey: genre, artistFilter: artist });
+    const releases = await fetchMusicBrainzReleases({ genreKey: genre, artistFilter: artist, textFilter: q });
 
     const ranked = releases
       .map(scoreRelease)
       .sort((a, b) => b.opportunityScore - a.opportunityScore);
 
+    const qLower = q.toLowerCase();
+    const filtered = ranked.filter((item) => {
+      if (item.opportunityScore < minScore) return false;
+      if (!qLower) return true;
+
+      const haystack = `${item.title} ${item.artist} ${item.raritySignals.join(" ")}`.toLowerCase();
+      return haystack.includes(qLower);
+    });
+
     const start = (page - 1) * limit;
-    const items = ranked.slice(start, start + limit);
-    const hasMore = start + limit < ranked.length;
+    const items = filtered.slice(start, start + limit);
+    const hasMore = start + limit < filtered.length;
 
     return NextResponse.json({
       success: true,
       source: "MusicBrainz",
       genre,
       artist,
+      q,
+      minScore,
       page,
       limit,
-      total: ranked.length,
+      total: filtered.length,
       hasMore,
       generatedAt: new Date().toISOString(),
       items,
