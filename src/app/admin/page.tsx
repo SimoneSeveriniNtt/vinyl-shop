@@ -251,16 +251,16 @@ export default function AdminPage() {
     <div className="min-h-screen bg-zinc-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col gap-4 mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-zinc-900">Gestione Vinili</h1>
             <p className="text-zinc-500 mt-1">Accesso come <span className="font-medium text-zinc-700">{user.email}</span></p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="grid grid-cols-[1fr_auto] gap-3 sm:flex sm:items-center sm:justify-end">
             {(tab === "vinyls" || tab === "sold") && (
               <button
                 onClick={openNew}
-                className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-zinc-900 font-semibold px-5 py-3 rounded-xl transition-colors"
+                className="flex w-full items-center justify-center gap-2 bg-amber-400 hover:bg-amber-500 text-zinc-900 font-semibold px-5 py-3 rounded-xl transition-colors sm:w-auto"
               >
                 <Plus className="w-5 h-5" />
                 Nuovo Vinile
@@ -268,7 +268,7 @@ export default function AdminPage() {
             )}
             <button
               onClick={signOut}
-              className="flex items-center gap-2 border border-zinc-200 text-zinc-500 hover:text-red-500 hover:border-red-200 px-4 py-3 rounded-xl transition-colors"
+              className="flex items-center justify-center gap-2 border border-zinc-200 text-zinc-500 hover:text-red-500 hover:border-red-200 px-4 py-3 rounded-xl transition-colors"
               title="Esci"
             >
               <LogOut className="w-5 h-5" />
@@ -287,10 +287,10 @@ export default function AdminPage() {
           </div>
         )}
 
-        <div className="flex gap-2 mb-6 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 mb-6 sm:flex sm:flex-wrap">
           <button
             onClick={() => setTab("vinyls")}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            className={`inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
               tab === "vinyls" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
             }`}
           >
@@ -306,7 +306,7 @@ export default function AdminPage() {
           </button>
           <button
             onClick={() => setTab("sold")}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            className={`inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
               tab === "sold" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
             }`}
           >
@@ -322,7 +322,7 @@ export default function AdminPage() {
           </button>
           <button
             onClick={() => setTab("orders")}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            className={`col-span-2 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-colors sm:col-span-1 ${
               tab === "orders" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
             }`}
           >
@@ -529,8 +529,77 @@ export default function AdminPage() {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
+          <>
+            <div className="space-y-4 md:hidden">
+              {vinyls.filter((v) => v.available).map((vinyl) => (
+                <div key={vinyl.id} className="bg-white rounded-2xl shadow-sm p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-zinc-100 flex-shrink-0">
+                      {vinyl.cover_url ? (
+                        <img src={vinyl.cover_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-300 text-xs">N/A</div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-zinc-900 truncate">{vinyl.title}</p>
+                          <p className="text-sm text-zinc-500 truncate">{vinyl.artist}</p>
+                        </div>
+                        <span className="font-semibold text-zinc-900 whitespace-nowrap">€{Number(vinyl.price).toFixed(2)}</span>
+                      </div>
+                      {vinyl.is_signed && (
+                        <span className="inline-flex mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                          AUTOGRAFATO
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
+                    <div className="rounded-xl bg-zinc-50 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-400">Genere</p>
+                      <p className="text-zinc-700 mt-1 truncate">{vinyl.genres?.name || "—"}</p>
+                    </div>
+                    <div className="rounded-xl bg-zinc-50 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-400">Condizione</p>
+                      <p className="text-zinc-700 mt-1 truncate">{CONDITION_LABELS[vinyl.condition] || vinyl.condition}</p>
+                    </div>
+                    <div className="rounded-xl bg-zinc-50 px-3 py-2 col-span-2">
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-400">Anno</p>
+                      <p className="text-zinc-700 mt-1">{vinyl.release_year || "—"}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    <button
+                      onClick={() => toggleAvailability(vinyl)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-3 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100"
+                    >
+                      Segna venduto
+                    </button>
+                    <button
+                      onClick={() => openEdit(vinyl)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 px-3 py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
+                    >
+                      <Pencil className="w-4 h-4" />
+                      Modifica
+                    </button>
+                    <button
+                      onClick={() => handleDelete(vinyl.id)}
+                      className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 px-3 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Elimina
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="bg-zinc-50 border-b border-zinc-100">
@@ -598,7 +667,8 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+            </div>
+          </>
         ))}
 
         {/* ===== TAB: VENDUTI ===== */}
@@ -613,13 +683,79 @@ export default function AdminPage() {
             <p className="text-zinc-400 text-sm mt-1">I vinili segnati come venduti appariranno qui</p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-100">
+          <>
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4 md:mb-0">
+              <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-100">
               <p className="text-sm text-zinc-500">
                 Se un vinile ti è stato restituito, clicca <strong className="text-green-700">Rimetti in vendita</strong> per riportarlo nel catalogo.
               </p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="space-y-4 p-4 md:hidden">
+              {vinyls.filter((v) => !v.available).map((vinyl) => (
+                <div key={vinyl.id} className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-zinc-200 flex-shrink-0 opacity-70">
+                      {vinyl.cover_url ? (
+                        <img src={vinyl.cover_url} alt="" className="w-full h-full object-cover grayscale" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-400 text-xs">N/A</div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-zinc-700 truncate">{vinyl.title}</p>
+                          <p className="text-sm text-zinc-400 truncate">{vinyl.artist}</p>
+                        </div>
+                        <span className="font-semibold text-zinc-500 whitespace-nowrap">€{Number(vinyl.price).toFixed(2)}</span>
+                      </div>
+                      {vinyl.is_signed && (
+                        <span className="inline-flex mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                          AUTOGRAFATO
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
+                    <div className="rounded-xl bg-white px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-400">Genere</p>
+                      <p className="text-zinc-600 mt-1 truncate">{vinyl.genres?.name || "—"}</p>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-400">Condizione</p>
+                      <p className="text-zinc-600 mt-1 truncate">{CONDITION_LABELS[vinyl.condition] || vinyl.condition}</p>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 col-span-2">
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-400">Venduto il</p>
+                      <p className="text-zinc-600 mt-1">
+                        {vinyl.updated_at
+                          ? new Date(vinyl.updated_at).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" })
+                          : "—"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 mt-4">
+                    <button
+                      onClick={() => toggleAvailability(vinyl)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-50 px-3 py-3 text-sm font-semibold text-green-700 transition-colors hover:bg-green-100"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Rimetti in vendita
+                    </button>
+                    <button
+                      onClick={() => handleDelete(vinyl.id)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 px-3 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Elimina definitivamente
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-zinc-100">
@@ -689,7 +825,8 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+            </div>
+          </>
         ))}
 
         {/* ===== TAB: ORDINI ===== */}
