@@ -187,67 +187,103 @@ function getDaysToDate(dateIso: string): number {
 function buildMarketIntelItems(artistFilter: string, textFilter: string): MarketRadarItem[] {
   const a = artistFilter.toLowerCase();
   const q = textFilter.toLowerCase();
-  const wantsMadame = [a, q].some((v) => v.includes("madame") || v.includes("disincanto"));
+  const query = [a, q].join(" ").toLowerCase();
 
-  if (!wantsMadame) return [];
+  const results: MarketRadarItem[] = [];
 
-  const releaseDate = "2026-04-17";
-  const days = getDaysToDate(releaseDate);
-  const releaseStatus: MarketRadarItem["releaseStatus"] = days > 0 ? "Pre-order" : "Uscito";
+  // Madame entries
+  if (query.includes("madame") || query.includes("disincanto")) {
+    const releaseDate = "2026-04-17";
+    const days = getDaysToDate(releaseDate);
+    const releaseStatus: MarketRadarItem["releaseStatus"] = days > 0 ? "Pre-order" : "Uscito";
+    const base: Omit<MarketRadarItem, "id" | "title" | "editionType" | "opportunityScore" | "recommendation" | "raritySignals" | "rarityConfidence" | "rarityChecklist"> = {
+      artist: "Madame",
+      source: "Market Intel",
+      releaseDate,
+      releaseStatus,
+      daysToRelease: days > 0 ? days : null,
+      country: "IT",
+    };
 
-  const base: Omit<MarketRadarItem, "id" | "title" | "editionType" | "opportunityScore" | "recommendation" | "raritySignals" | "rarityConfidence" | "rarityChecklist"> = {
-    artist: "Madame",
-    source: "Market Intel",
-    releaseDate,
-    releaseStatus,
-    daysToRelease: days > 0 ? days : null,
-    country: "IT",
-  };
+    results.push(
+      {
+        ...base,
+        id: "intel-madame-disincanto-clear-signed",
+        title: "Disincanto",
+        editionType: "Vinile Trasparente Autografato (esclusiva store)",
+        raritySignals: ["Possibile autografato", "Vinile colorato", "Limited edition", "Pre-order"],
+        rarityConfidence: "Alta",
+        rarityChecklist: [
+          "Conferma firma reale con foto dettagliata o certificazione dello store.",
+          "Verifica dicitura ufficiale di tiratura limitata/exclusive.",
+          "Controlla variante Crystal Clear e presenza poster in confezione.",
+        ],
+        opportunityScore: 93,
+        recommendation: "Alta",
+      },
+      {
+        ...base,
+        id: "intel-madame-disincanto-180g",
+        title: "Disincanto",
+        editionType: "Vinile 180gr con poster (standard)",
+        raritySignals: ["180gr", "Poster incluso", "Pre-order"],
+        rarityConfidence: "Media",
+        rarityChecklist: [
+          "Controlla differenza di prezzo tra store ufficiale e retail.",
+          "Verifica se esistono ristampe gia annunciate.",
+        ],
+        opportunityScore: 72,
+        recommendation: "Media",
+      }
+    );
+  }
 
-  return [
-    {
-      ...base,
-      id: "intel-madame-disincanto-clear-signed",
-      title: "Disincanto",
-      editionType: "Vinile Trasparente Autografato (esclusiva store)",
-      raritySignals: ["Possibile autografato", "Vinile colorato", "Limited edition", "Pre-order"],
-      rarityConfidence: "Alta",
-      rarityChecklist: [
-        "Conferma firma reale con foto dettagliata o certificazione dello store.",
-        "Verifica dicitura ufficiale di tiratura limitata/exclusive.",
-        "Controlla variante Crystal Clear e presenza poster in confezione.",
-      ],
-      opportunityScore: 93,
-      recommendation: "Alta",
-    },
-    {
-      ...base,
-      id: "intel-madame-disincanto-180g",
-      title: "Disincanto",
-      editionType: "Vinile 180gr con poster (standard)",
-      raritySignals: ["180gr", "Poster incluso", "Pre-order"],
-      rarityConfidence: "Media",
-      rarityChecklist: [
-        "Controlla differenza di prezzo tra store ufficiale e retail.",
-        "Verifica se esistono ristampe gia annunciate.",
-      ],
-      opportunityScore: 72,
-      recommendation: "Media",
-    },
-    {
-      ...base,
-      id: "intel-madame-disincanto-cd-signed",
-      title: "Disincanto",
-      editionType: "CD limitato autografato (non vinile)",
-      raritySignals: ["Possibile autografato", "Limited edition", "Pre-order"],
-      rarityConfidence: "Media",
-      rarityChecklist: [
-        "Non e un vinile: usa come segnale domanda artista, non come acquisto principale vinile.",
-      ],
-      opportunityScore: 63,
-      recommendation: "Media",
-    },
-  ];
+  // Sayf entries
+  if (query.includes("sayf")) {
+    const releaseDate = "2026-06-15";
+    const days = getDaysToDate(releaseDate);
+    const releaseStatus: MarketRadarItem["releaseStatus"] = days > 0 ? "Pre-order" : "In uscita";
+    const base: Omit<MarketRadarItem, "id" | "title" | "editionType" | "opportunityScore" | "recommendation" | "raritySignals" | "rarityConfidence" | "rarityChecklist"> = {
+      artist: "Sayf",
+      source: "Market Intel",
+      releaseDate,
+      releaseStatus,
+      daysToRelease: days > 0 ? days : null,
+      country: "IT",
+    };
+
+    results.push(
+      {
+        ...base,
+        id: "intel-sayf-tribal-colored",
+        title: "Tribal Gauze",
+        editionType: "Vinile Colorato Limited (esclusiva indie store)",
+        raritySignals: ["Limited edition", "Vinile colorato", "Pre-order"],
+        rarityConfidence: "Media",
+        rarityChecklist: [
+          "Verifica numero copie dichiarate della tiratura limitata.",
+          "Controlla variante colore e se disponibile con poster/booklet.",
+        ],
+        opportunityScore: 78,
+        recommendation: "Alta",
+      },
+      {
+        ...base,
+        id: "intel-sayf-tribal-standard",
+        title: "Tribal Gauze",
+        editionType: "Vinile Standard Black",
+        raritySignals: ["Pre-order"],
+        rarityConfidence: "Bassa",
+        rarityChecklist: [
+          "Edizione standard, mantieni attenzione su varianti colorate.",
+        ],
+        opportunityScore: 55,
+        recommendation: "Media",
+      }
+    );
+  }
+
+  return results;
 }
 
 function containsAllTokens(haystack: string, query: string): boolean {
@@ -279,14 +315,23 @@ async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<Mus
     ? `(release:\"${escapedText}\" OR artist:\"${escapedText}\" OR tag:${escapedText})`
     : "";
 
-  // Special pre-order focused date window: today to 6 months ahead
+  // Special pre-order focused date windows
   const today = new Date();
+  // Short window: 6 months (for genre-only searches)
   const sixMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate());
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const sixMonthsStr = `${sixMonthsAhead.getFullYear()}-${String(sixMonthsAhead.getMonth() + 1).padStart(2, '0')}-${String(sixMonthsAhead.getDate()).padStart(2, '0')}`;
-  const upcomingDateClause = `date:[${todayStr} TO ${sixMonthsStr}]`;
+  const upcomingDateClause6m = `date:[${todayStr} TO ${sixMonthsStr}]`;
+  
+  // Extended window: 12 months (for artist-specific searches)
+  const twelveMonthsAhead = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+  const twelveMonthsStr = `${twelveMonthsAhead.getFullYear()}-${String(twelveMonthsAhead.getMonth() + 1).padStart(2, '0')}-${String(twelveMonthsAhead.getDate()).padStart(2, '0')}`;
+  const upcomingDateClause12m = `date:[${todayStr} TO ${twelveMonthsStr}]`;
   
   const baseDateClause = `date:[${previousYear}-01-01 TO ${nextYear}-12-31]`;
+  
+  // Choose upcoming window based on whether artist is specified
+  const upcomingDateClause = artistClause ? upcomingDateClause12m : upcomingDateClause6m;
   
   // Choose date filter based on upcomingOnly flag
   const dateClause = upcomingOnly ? upcomingDateClause : baseDateClause;

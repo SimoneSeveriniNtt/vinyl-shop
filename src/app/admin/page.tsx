@@ -214,6 +214,13 @@ export default function AdminPage() {
     }
   }, [tab, radarAutoFetched, radarLoading, fetchMarketRadar]);
 
+  // Auto-refetch when any filter changes (only after initial load)
+  useEffect(() => {
+    if (tab === "radar" && radarAutoFetched) {
+      void fetchMarketRadar(1, false);
+    }
+  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore, radarUpcomingOnly, tab, radarAutoFetched, fetchMarketRadar]);
+
   useEffect(() => {
     setRadarAutoFetched(false);
     setRadarError("");
