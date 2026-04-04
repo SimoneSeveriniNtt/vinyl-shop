@@ -588,19 +588,43 @@ export default function AdminPage() {
       is_sealed: form.is_sealed,
       };
 
+      const { release_year: _dropReleaseYear, ...baseVinylDataNoReleaseYear } = baseVinylData;
+
+      const vinylDataWithSeparatedSealedNoReleaseYear = {
+        ...baseVinylDataNoReleaseYear,
+        condition: form.condition,
+        is_sealed: form.is_sealed,
+      };
+
       const vinylDataLegacy = {
       ...baseVinylData,
       condition: formatCondition(form.condition, form.is_sealed),
+      };
+
+      const vinylDataLegacyNoReleaseYear = {
+        ...baseVinylDataNoReleaseYear,
+        condition: formatCondition(form.condition, form.is_sealed),
       };
 
       if (editingId) {
       // Update
         let { error } = await supabase.from("vinyls").update(vinylDataWithSeparatedSealed).eq("id", editingId);
 
-      // Backward-compatible fallback for environments where is_sealed column is not migrated yet.
-        if (error?.message?.includes("is_sealed")) {
-          const legacyUpdate = await supabase.from("vinyls").update(vinylDataLegacy).eq("id", editingId);
-          error = legacyUpdate.error;
+        if (error) {
+          const updateFallbackPayloads = [
+            vinylDataLegacy,
+            vinylDataWithSeparatedSealedNoReleaseYear,
+            vinylDataLegacyNoReleaseYear,
+          ];
+
+          for (const payload of updateFallbackPayloads) {
+            const retry = await supabase.from("vinyls").update(payload).eq("id", editingId);
+            if (!retry.error) {
+              error = null;
+              break;
+            }
+            error = retry.error;
+          }
         }
 
         if (error) {
@@ -628,8 +652,20 @@ export default function AdminPage() {
       // Insert
         let insertRes = await supabase.from("vinyls").insert(vinylDataWithSeparatedSealed).select().single();
 
-        if (insertRes.error?.message?.includes("is_sealed")) {
-          insertRes = await supabase.from("vinyls").insert(vinylDataLegacy).select().single();
+        if (insertRes.error) {
+          const insertFallbackPayloads = [
+            vinylDataLegacy,
+            vinylDataWithSeparatedSealedNoReleaseYear,
+            vinylDataLegacyNoReleaseYear,
+          ];
+
+          for (const payload of insertFallbackPayloads) {
+            const retry = await supabase.from("vinyls").insert(payload).select().single();
+            insertRes = retry;
+            if (!retry.error) {
+              break;
+            }
+          }
         }
 
         const data = insertRes.data;
