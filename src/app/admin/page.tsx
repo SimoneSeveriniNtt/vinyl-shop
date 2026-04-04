@@ -209,24 +209,10 @@ export default function AdminPage() {
     return () => clearTimeout(timer);
   }, [user]);
 
-  useEffect(() => {
-    if (tab === "radar" && !radarAutoFetched && !radarLoading && radarArtistFilter) {
-      void fetchDiscogsRadar(1, false);
-    }
-  }, [tab, radarAutoFetched, radarLoading, fetchDiscogsRadar, radarArtistFilter]);
-
-  useEffect(() => {
-    setRadarAutoFetched(false);
-    setRadarError("");
-    setRadarItems([]);
-    setRadarPage(1);
-    setRadarHasMore(false);
-    setRadarTotal(0);
-    setRadarNarrative(null);
-  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarPreorderOnly, radarMinRarity]);
-
   function applyRadarSearch() {
     setRadarArtistFilter(radarArtistInput.trim());
+    setRadarAutoFetched(false);
+    void fetchDiscogsRadar(1, false);
   }
 
   function radarRarityBadge(rarity: string): string {
@@ -1218,7 +1204,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => void fetchDiscogsRadar(1, false)}
+                      onClick={applyRadarSearch}
                       disabled={radarLoading || (!radarArtistInput.trim() && !radarAlbumInput.trim())}
                       className="w-full inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                     >
