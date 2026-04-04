@@ -109,8 +109,36 @@ export default function AdminPage() {
   const [alertsError, setAlertsError] = useState("");
   const [monitoringInProgress, setMonitoringInProgress] = useState(false);
 
+  function parseUnknownError(err: unknown): string {
+    if (err instanceof Error) return err.message;
+
+    if (typeof err === "string") return err;
+
+    if (err && typeof err === "object") {
+      const obj = err as Record<string, unknown>;
+      const message = typeof obj.message === "string" ? obj.message : "";
+      const details = typeof obj.details === "string" ? obj.details : "";
+      const hint = typeof obj.hint === "string" ? obj.hint : "";
+      const code = typeof obj.code === "string" ? obj.code : "";
+
+      const composed = [message, details, hint, code ? `code: ${code}` : ""]
+        .filter(Boolean)
+        .join(" | ");
+
+      if (composed) return composed;
+
+      try {
+        return JSON.stringify(obj);
+      } catch {
+        return "Errore sconosciuto";
+      }
+    }
+
+    return "Errore sconosciuto";
+  }
+
   function toAlertErrorMessage(err: unknown, fallback: string): string {
-    const msg = err instanceof Error ? err.message : String(err || fallback);
+    const msg = parseUnknownError(err) || fallback;
     const lower = msg.toLowerCase();
 
     if (lower.includes("could not find the table") || lower.includes("schema cache")) {
