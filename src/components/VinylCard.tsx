@@ -66,20 +66,20 @@ export default function VinylCard({ vinyl }: VinylCardProps) {
           </h3>
         </Link>
         <p className="text-zinc-500 text-xs sm:text-sm mt-1 line-clamp-1">{vinyl.artist}</p>
-        {vinyl.genres && (
-          <span className="inline-block mt-2 text-[11px] bg-zinc-100 text-zinc-600 px-2 py-1 rounded-full w-fit">
-            {vinyl.genres.name}
-          </span>
-        )}
-        {(vinyl.is_signed || sealed) && (
+        {(vinyl.genres || vinyl.is_signed || sealed) && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
+            {vinyl.genres && (
+              <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-1 text-[11px] leading-none text-zinc-600">
+                {vinyl.genres.name}
+              </span>
+            )}
             {vinyl.is_signed && (
-              <span className="inline-block text-[11px] bg-amber-100 text-amber-800 px-2 py-1 rounded-full w-fit font-semibold">
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] leading-none font-semibold text-amber-800">
                 Autografato
               </span>
             )}
             {sealed && (
-              <span className="inline-block text-[11px] bg-blue-100 text-blue-800 px-2 py-1 rounded-full w-fit font-semibold">
+              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-[11px] leading-none font-semibold text-blue-800">
                 Sigillato
               </span>
             )}
