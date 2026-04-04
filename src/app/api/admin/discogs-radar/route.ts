@@ -7,6 +7,7 @@ import {
   matchesGenreFilter,
   type DiscogsRadarItem,
 } from "@/lib/discogs";
+import { searchWebPreorderIntel } from "@/lib/preorder-intel";
 
 function getBearerToken(authHeader: string | null): string | null {
   if (!authHeader) return null;
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
     const artist = (req.nextUrl.searchParams.get("artist") || "").trim();
     const album = (req.nextUrl.searchParams.get("album") || "").trim();
     const genre = (req.nextUrl.searchParams.get("genre") || "").trim();
+    const includePreorders = req.nextUrl.searchParams.get("includePreorders") !== "0";
     const minRarity = Math.max(0, Math.min(100, Number.parseInt(req.nextUrl.searchParams.get("minRarity") || "0", 10) || 0));
     const page = Math.max(1, Number.parseInt(req.nextUrl.searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(40, Math.max(5, Number.parseInt(req.nextUrl.searchParams.get("limit") || "20", 10) || 20));
@@ -109,6 +111,21 @@ export async function GET(req: NextRequest) {
       return b.rarity_score - a.rarity_score;
     });
 
+    const preorderItems = includePreorders
+      ? await searchWebPreorderIntel({ artist, album: album || undefined, genre: genre || undefined, limit: 8 })
+      : [];
+
+    const merged = [...radarItems, ...preorderItems].sort((a, b) => b.rarity_score - a.rarity_score);
+    const deduped: DiscogsRadarItem[] = [];
+    const seen = new Set<string>();
+
+    for (const item of merged) {
+      const key = `${item.artist}|${item.title}`.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(item);
+    }
+
     const hasMore = searchPage.page < searchPage.pages;
 
     return NextResponse.json({
@@ -117,14 +134,17 @@ export async function GET(req: NextRequest) {
       artist,
       album: album || null,
       genre: genre || null,
+      includePreorders,
       minRarity,
       page,
       limit,
-      total: radarItems.length,
+      total: deduped.length,
       hasMore,
-      items: radarItems,
+      items: deduped,
       generatedAt: new Date().toISOString(),
-      note: "Dati Discogs con calcolo rarità basato su edizioni, formati, anni",
+      note: includePreorders
+        ? "Dati Discogs + Web Preorder Intel per edizioni rare e pre-order"
+        : "Dati Discogs con calcolo rarità basato su edizioni, formati, anni",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore radar Discogs";

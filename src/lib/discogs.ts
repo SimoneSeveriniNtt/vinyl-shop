@@ -68,7 +68,9 @@ export interface DiscogsRadarItem {
   id: number;
   artist: string;
   title: string;
+  source: "Discogs" | "Web Preorder Intel";
   releaseYear: number | null;
+  releaseDate: string | null;
   catalogNumber: string | null;
   country: string | null;
   format: string; // "Vinyl", "CD", etc
@@ -88,6 +90,11 @@ export interface DiscogsRadarItem {
     want: number;
     numForSale: number | null;
     lowestPrice: number | null;
+  };
+  preorder: {
+    isPreorder: boolean;
+    store: string | null;
+    url: string | null;
   };
 }
 
@@ -328,7 +335,9 @@ export async function buildRadarItem(release: DiscogsReleaseDetail): Promise<Dis
     id: release.id,
     artist,
     title: release.title,
+    source: "Discogs",
     releaseYear: release.year || null,
+    releaseDate: release.released || null,
     catalogNumber: release.catalog_number || null,
     country: release.country || null,
     format: "Vinyl",
@@ -344,6 +353,11 @@ export async function buildRadarItem(release: DiscogsReleaseDetail): Promise<Dis
     images: release.images?.map(img => ({ uri: img.uri, uri150: img.uri150 })) || [],
     rarity_description: "",
     marketplace,
+    preorder: {
+      isPreorder: Boolean(release.year && release.year >= new Date().getFullYear()),
+      store: null,
+      url: release.uri || `https://www.discogs.com/release/${release.id}`,
+    },
   };
 
   return {

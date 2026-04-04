@@ -79,6 +79,7 @@ export default function AdminPage() {
   const [radarArtistFilter, setRadarArtistFilter] = useState("");
   const [radarAlbumInput, setRadarAlbumInput] = useState("");
   const [radarGenreInput, setRadarGenreInput] = useState("");
+  const [radarIncludePreorders, setRadarIncludePreorders] = useState(true);
   const [radarMinRarity, setRadarMinRarity] = useState(0);
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarLoadingMore, setRadarLoadingMore] = useState(false);
@@ -146,6 +147,7 @@ export default function AdminPage() {
       if (radarGenreInput.trim()) {
         params.set("genre", radarGenreInput.trim());
       }
+      params.set("includePreorders", radarIncludePreorders ? "1" : "0");
       if (radarMinRarity > 0) {
         params.set("minRarity", String(radarMinRarity));
       }
@@ -177,7 +179,7 @@ export default function AdminPage() {
       setRadarLoading(false);
       setRadarLoadingMore(false);
     }
-  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarMinRarity]);
+  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarMinRarity]);
 
   useEffect(() => {
     if (!user) return;
@@ -203,7 +205,7 @@ export default function AdminPage() {
     setRadarPage(1);
     setRadarHasMore(false);
     setRadarTotal(0);
-  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarMinRarity]);
+  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarMinRarity]);
 
   function applyRadarSearch() {
     setRadarArtistFilter(radarArtistInput.trim());
@@ -1145,6 +1147,15 @@ export default function AdminPage() {
                 <div className="mb-5">
                   <p className="text-xs font-semibold uppercase text-zinc-600 mb-3 tracking-wide">Filtri</p>
                   <div className="flex flex-col gap-4">
+                    <label className="flex items-center gap-2 text-sm text-zinc-700">
+                      <input
+                        type="checkbox"
+                        checked={radarIncludePreorders}
+                        onChange={(e) => setRadarIncludePreorders(e.target.checked)}
+                        className="w-4 h-4 rounded border-zinc-300 text-amber-500 focus:ring-amber-400"
+                      />
+                      Includi pre-order da web (store/news)
+                    </label>
                     <div>
                       <label className="text-sm font-medium text-zinc-700 block mb-2">
                         Rarità minima: {radarMinRarity > 0 ? radarMinRarity : "Qualsiasi"}
@@ -1198,6 +1209,7 @@ export default function AdminPage() {
                   {radarArtistFilter ? ` • artista: ${radarArtistFilter}` : ""}
                   {radarAlbumInput ? ` • album: ${radarAlbumInput}` : ""}
                   {radarGenreInput ? ` • genere: ${radarGenreInput}` : ""}
+                  {radarIncludePreorders ? " • preorder intel: ON" : " • preorder intel: OFF"}
                   {radarMinRarity > 0 ? ` • rarità >= ${radarMinRarity}` : ""}
                 </p>
                 {radarItems.map((item) => (
@@ -1223,6 +1235,9 @@ export default function AdminPage() {
                             {item.releaseYear && (
                               <p className="text-xs text-zinc-500">Anno: {item.releaseYear}</p>
                             )}
+                            {item.releaseDate && (
+                              <p className="text-xs text-zinc-500">Data: {item.releaseDate}</p>
+                            )}
                           </div>
                           <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${radarRarityBadge(item.estimated_rarity)}`}>
                             {item.estimated_rarity}
@@ -1236,6 +1251,9 @@ export default function AdminPage() {
                             <span className="bg-zinc-100 px-2 py-1 rounded-full">{item.formatDetails.slice(0, 2).join(", ")}</span>
                           )}
                           {item.country && <span className="bg-zinc-100 px-2 py-1 rounded-full">{item.country}</span>}
+                          {item.source && <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">Fonte: {item.source}</span>}
+                          {item.preorder?.isPreorder && <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">Pre-order</span>}
+                          {item.preorder?.store && <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full">Store: {item.preorder.store}</span>}
                           {item.genres.length > 0 && (
                             <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">{item.genres[0]}</span>
                           )}
