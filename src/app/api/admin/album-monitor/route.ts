@@ -6,6 +6,23 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 );
 
+const MONITOR_STATE_ID = "album_monitor_manual";
+const MONITOR_STALE_MS = 20 * 60 * 1000;
+const SCAN_CONCURRENCY = 10;
+const FETCH_TIMEOUT_MS = 7000;
+
+type MonitorStateRow = {
+  id: string;
+  is_running: boolean;
+  started_at: string | null;
+  heartbeat_at: string | null;
+  finished_at: string | null;
+  last_message: string | null;
+  last_new_alerts: number | null;
+  monitored_count: number | null;
+  updated_at: string | null;
+};
+
 function normalizeArtistName(input: string): string {
   return input
     .toLowerCase()
@@ -38,94 +55,143 @@ interface AlbumFound {
   price_eur?: number;
 }
 
-// Scansiona Feltrinelli per album degli artisti monitorati
-async function scanFeltrinelli(artistNames: string[]): Promise<AlbumFound[]> {
-  const results: AlbumFound[] = [];
+function hasMonitorStateTableError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  const msg = (error.message || "").toLowerCase();
+  return error.code === "PGRST205" || msg.includes("monitoring_state") || msg.includes("relation") && msg.includes("does not exist");
+}
 
-  try {
-    for (const artist of artistNames) {
-      try {
-        const searchUrl = `https://www.feltrinelli.it/search?q=${encodeURIComponent(artist)}%20vinile&text=`;
-        const response = await fetch(searchUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          },
-        });
+function nowIso(): string {
+  return new Date().toISOString();
+}
 
-        if (!response.ok) continue;
+function isFreshHeartbeat(heartbeatAt: string | null | undefined): boolean {
+  if (!heartbeatAt) return false;
+  const time = Date.parse(heartbeatAt);
+  if (Number.isNaN(time)) return false;
+  return Date.now() - time < MONITOR_STALE_MS;
+}
 
-        const html = await response.text();
+async function getMonitorState(): Promise<MonitorStateRow | null> {
+  const { data, error } = await supabase
+    .from("monitoring_state")
+    .select("id, is_running, started_at, heartbeat_at, finished_at, last_message, last_new_alerts, monitored_count, updated_at")
+    .eq("id", MONITOR_STATE_ID)
+    .maybeSingle();
 
-        // Cerca pattern per album in preorder: "Disponibile dal [DATA]"
-        const preorderMatches = html.matchAll(
-          /Disponibile\s+dal\s+(\d+\s+\w+\s+\d{4})/gi
-        );
-
-        for (const match of preorderMatches) {
-          const releaseDate = match[1];
-          // Estrai titolo dell'album e altri dettagli dal contesto HTML
-          // Questo è un pattern semplificato - in realtà occorrerebbe parsare meglio
-          results.push({
-            artist_name: artist,
-            album_title: `Album ${artist}`,
-            source: "Feltrinelli",
-            release_date: releaseDate,
-            retailer_url: searchUrl,
-          });
-        }
-      } catch (err) {
-        console.error(`Errore scansione Feltrinelli per ${artist}:`, err);
-      }
-    }
-  } catch (err) {
-    console.error("Errore scansione Feltrinelli:", err);
+  if (error) {
+    if (hasMonitorStateTableError(error)) return null;
+    throw error;
   }
 
+  return (data as MonitorStateRow | null) || null;
+}
+
+async function writeMonitorState(patch: Partial<MonitorStateRow>): Promise<void> {
+  const payload = {
+    id: MONITOR_STATE_ID,
+    updated_at: nowIso(),
+    ...patch,
+  };
+
+  const { error } = await supabase.from("monitoring_state").upsert(payload, { onConflict: "id" });
+  if (error && !hasMonitorStateTableError(error)) {
+    throw error;
+  }
+}
+
+async function fetchTextWithTimeout(url: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+    });
+
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function mapWithConcurrency<TInput, TOutput>(
+  items: TInput[],
+  limit: number,
+  worker: (item: TInput) => Promise<TOutput>
+): Promise<TOutput[]> {
+  const results: TOutput[] = new Array(items.length);
+  let index = 0;
+
+  async function runWorker() {
+    while (true) {
+      const current = index;
+      index += 1;
+      if (current >= items.length) break;
+      results[current] = await worker(items[current]);
+    }
+  }
+
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, () => runWorker());
+  await Promise.all(workers);
   return results;
+}
+
+// Scansiona Feltrinelli per album degli artisti monitorati
+async function scanFeltrinelli(artistNames: string[]): Promise<AlbumFound[]> {
+  const perArtist = await mapWithConcurrency(artistNames, SCAN_CONCURRENCY, async (artist) => {
+    const searchUrl = `https://www.feltrinelli.it/search?q=${encodeURIComponent(artist)}%20vinile&text=`;
+    const html = await fetchTextWithTimeout(searchUrl);
+    if (!html) return [] as AlbumFound[];
+
+    const results: AlbumFound[] = [];
+    const preorderMatches = html.matchAll(/Disponibile\s+dal\s+(\d+\s+\w+\s+\d{4})/gi);
+    for (const match of preorderMatches) {
+      const releaseDate = match[1];
+      results.push({
+        artist_name: artist,
+        album_title: `Album ${artist}`,
+        source: "Feltrinelli",
+        release_date: releaseDate,
+        retailer_url: searchUrl,
+      });
+    }
+
+    return results;
+  });
+
+  return perArtist.flat();
 }
 
 // Scansiona IBS per album degli artisti monitorati
 async function scanIBS(artistNames: string[]): Promise<AlbumFound[]> {
-  const results: AlbumFound[] = [];
+  const perArtist = await mapWithConcurrency(artistNames, SCAN_CONCURRENCY, async (artist) => {
+    const searchUrl = `https://www.ibs.it/ricerca/?q=${encodeURIComponent(artist)}%20vinile`;
+    const html = await fetchTextWithTimeout(searchUrl);
+    if (!html) return [] as AlbumFound[];
 
-  try {
-    for (const artist of artistNames) {
-      try {
-        const searchUrl = `https://www.ibs.it/ricerca/?q=${encodeURIComponent(artist)}%20vinile`;
-        const response = await fetch(searchUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          },
-        });
-
-        if (!response.ok) continue;
-
-        const html = await response.text();
-
-        // Pattern simile a Feltrinelli
-        const preorderMatches = html.matchAll(
-          /Disponibile\s+dal\s+(\d+\s+\w+\s+\d{4})/gi
-        );
-
-        for (const match of preorderMatches) {
-          const releaseDate = match[1];
-          results.push({
-            artist_name: artist,
-            album_title: `Album ${artist}`,
-            source: "IBS",
-            release_date: releaseDate,
-            retailer_url: searchUrl,
-          });
-        }
-      } catch (err) {
-        console.error(`Errore scansione IBS per ${artist}:`, err);
-      }
+    const results: AlbumFound[] = [];
+    const preorderMatches = html.matchAll(/Disponibile\s+dal\s+(\d+\s+\w+\s+\d{4})/gi);
+    for (const match of preorderMatches) {
+      const releaseDate = match[1];
+      results.push({
+        artist_name: artist,
+        album_title: `Album ${artist}`,
+        source: "IBS",
+        release_date: releaseDate,
+        retailer_url: searchUrl,
+      });
     }
-  } catch (err) {
-    console.error("Errore scansione IBS:", err);
-  }
 
-  return results;
+    return results;
+  });
+
+  return perArtist.flat();
 }
 
 // Verifica autenticazione admin
@@ -146,6 +212,7 @@ async function isAdminAuthenticated(req: NextRequest): Promise<boolean> {
 }
 
 export async function POST(req: NextRequest) {
+  let runStarted = false;
   try {
     // Verifica autenticazione
     const isAuthenticated = await isAdminAuthenticated(req);
@@ -155,6 +222,33 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    const currentState = await getMonitorState();
+    if (currentState?.is_running && isFreshHeartbeat(currentState.heartbeat_at)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Monitoraggio gia in corso. Attendi il completamento prima di rilanciare.",
+          monitoring: {
+            isRunning: true,
+            startedAt: currentState.started_at,
+            heartbeatAt: currentState.heartbeat_at,
+            lastMessage: currentState.last_message,
+          },
+        },
+        { status: 409 }
+      );
+    }
+
+    await writeMonitorState({
+      is_running: true,
+      started_at: nowIso(),
+      heartbeat_at: nowIso(),
+      finished_at: null,
+      monitored_count: null,
+      last_message: "Monitoraggio in corso...",
+    });
+    runStarted = true;
 
     // Fetch artisti da monitorare
     const { data: watchedArtists, error: fetchError } = await supabase
@@ -169,24 +263,53 @@ export async function POST(req: NextRequest) {
     const artistNames = watchedArtists.map((a) => a.artist_name);
 
     if (artistNames.length === 0) {
+      await writeMonitorState({
+        is_running: false,
+        finished_at: nowIso(),
+        monitored_count: 0,
+        last_new_alerts: 0,
+        last_message: "Nessun artista da monitorare",
+      });
       return NextResponse.json({
         success: true,
         message: "Nessun artista da monitorare",
         newAlerts: 0,
+        monitoring: { isRunning: false },
       });
     }
 
-    // Scansiona fonti
-    const feltrinelliResults = await scanFeltrinelli(artistNames);
-    const ibsResults = await scanIBS(artistNames);
+    // Scansiona fonti in parallelo
+    const [feltrinelliResults, ibsResults] = await Promise.all([
+      scanFeltrinelli(artistNames),
+      scanIBS(artistNames),
+    ]);
+
+    await writeMonitorState({
+      heartbeat_at: nowIso(),
+      monitored_count: artistNames.length,
+      last_message: `Scansione completata: ${artistNames.length} artisti`,
+    });
 
     const allResults = [...feltrinelliResults, ...ibsResults];
 
     if (allResults.length === 0) {
+      await writeMonitorState({
+        is_running: false,
+        finished_at: nowIso(),
+        monitored_count: artistNames.length,
+        last_new_alerts: 0,
+        last_message: "Nessun nuovo album trovato",
+      });
       return NextResponse.json({
         success: true,
         message: "Nessun nuovo album trovato",
         newAlerts: 0,
+        monitored: artistNames.length,
+        sources: {
+          feltrinelli: feltrinelliResults.length,
+          ibs: ibsResults.length,
+        },
+        monitoring: { isRunning: false },
       });
     }
 
@@ -271,13 +394,39 @@ export async function POST(req: NextRequest) {
         .eq("id", artist.id);
     }
 
+    await writeMonitorState({
+      is_running: false,
+      finished_at: nowIso(),
+      heartbeat_at: nowIso(),
+      monitored_count: artistNames.length,
+      last_new_alerts: insertedCount,
+      last_message: `Monitoraggio completato: ${insertedCount} nuovi album`,
+    });
+    runStarted = false;
+
     return NextResponse.json({
       success: true,
       message: `Monitoraggio completato. ${insertedCount} nuovi album trovati.`,
       newAlerts: insertedCount,
       monitored: artistNames.length,
+      sources: {
+        feltrinelli: feltrinelliResults.length,
+        ibs: ibsResults.length,
+      },
+      monitoring: {
+        isRunning: false,
+      },
     });
   } catch (error) {
+    if (runStarted) {
+      await writeMonitorState({
+        is_running: false,
+        finished_at: nowIso(),
+        heartbeat_at: nowIso(),
+        last_message: error instanceof Error ? `Errore monitoraggio: ${error.message}` : "Errore monitoraggio",
+      });
+      runStarted = false;
+    }
     console.error("Errore API album-monitor:", error);
     return NextResponse.json(
       {
@@ -289,6 +438,14 @@ export async function POST(req: NextRequest) {
       },
       { status: 500 }
     );
+  } finally {
+    if (runStarted) {
+      await writeMonitorState({
+        is_running: false,
+        finished_at: nowIso(),
+        heartbeat_at: nowIso(),
+      });
+    }
   }
 }
 
@@ -315,11 +472,22 @@ export async function GET(req: NextRequest) {
       .select("id", { count: "exact" })
       .eq("status", "new");
 
+    const monitoringState = await getMonitorState();
+
     return NextResponse.json({
       success: true,
       status: "Monitoraggio attivo",
       watchedCount: watched?.length || 0,
       newAlertsCount: newAlerts?.length || 0,
+      monitoring: {
+        isRunning: Boolean(monitoringState?.is_running && isFreshHeartbeat(monitoringState?.heartbeat_at)),
+        startedAt: monitoringState?.started_at || null,
+        heartbeatAt: monitoringState?.heartbeat_at || null,
+        finishedAt: monitoringState?.finished_at || null,
+        lastMessage: monitoringState?.last_message || null,
+        lastNewAlerts: monitoringState?.last_new_alerts ?? null,
+        monitoredCount: monitoringState?.monitored_count ?? null,
+      },
     });
   } catch (error) {
     return NextResponse.json(

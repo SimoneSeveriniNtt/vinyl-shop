@@ -30,6 +30,22 @@ interface EbayPublishResponse {
   error?: string;
 }
 
+interface MonitorStatusResponse {
+  success: boolean;
+  watchedCount?: number;
+  newAlertsCount?: number;
+  monitoring?: {
+    isRunning?: boolean;
+    startedAt?: string | null;
+    heartbeatAt?: string | null;
+    finishedAt?: string | null;
+    lastMessage?: string | null;
+    lastNewAlerts?: number | null;
+    monitoredCount?: number | null;
+  };
+  error?: string;
+}
+
 const emptyForm: VinylForm = {
   title: "",
   artist: "",
@@ -112,6 +128,7 @@ export default function AdminPage() {
   const [alertsError, setAlertsError] = useState("");
   const [alertsNotice, setAlertsNotice] = useState("");
   const [monitoringInProgress, setMonitoringInProgress] = useState(false);
+  const [monitoringStatusText, setMonitoringStatusText] = useState("");
   const [alertsViewTab, setAlertsViewTab] = useState<"configured" | "received">("configured");
   const [watchedArtistsSearch, setWatchedArtistsSearch] = useState("");
   const [watchedArtistsPage, setWatchedArtistsPage] = useState(1);
@@ -325,11 +342,46 @@ export default function AdminPage() {
         "success",
         `Monitoraggio completato. ${data.newAlerts} nuovi album trovati.`
       );
-      await fetchAlertData();
+      await Promise.all([fetchAlertData(), fetchMonitoringStatus()]);
     } catch (err) {
       showMessage("error", err instanceof Error ? err.message : "Errore monitoraggio");
     } finally {
       setMonitoringInProgress(false);
+    }
+  }
+
+  async function fetchMonitoringStatus() {
+    try {
+      const token = await getAdminToken();
+      const response = await fetch("/api/admin/album-monitor", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = (await response.json()) as MonitorStatusResponse;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Errore stato monitoraggio");
+      }
+
+      const isRunning = Boolean(payload.monitoring?.isRunning);
+      setMonitoringInProgress(isRunning);
+
+      if (isRunning) {
+        const startedAt = payload.monitoring?.startedAt
+          ? new Date(payload.monitoring.startedAt).toLocaleString("it-IT")
+          : "ora";
+        setMonitoringStatusText(`Monitoraggio in corso (avviato: ${startedAt})`);
+      } else if (payload.monitoring?.finishedAt) {
+        const finishedAt = new Date(payload.monitoring.finishedAt).toLocaleString("it-IT");
+        const newAlerts = payload.monitoring?.lastNewAlerts ?? 0;
+        setMonitoringStatusText(`Ultimo monitoraggio: ${finishedAt} (${newAlerts} nuovi alert)`);
+      } else {
+        setMonitoringStatusText("");
+      }
+    } catch {
+      // Non bloccare UI se fallisce il polling stato.
     }
   }
 
@@ -428,6 +480,13 @@ export default function AdminPage() {
   useEffect(() => {
     if (tab === "alerts") {
       void fetchAlertData();
+      void fetchMonitoringStatus();
+
+      const statusPoll = setInterval(() => {
+        void fetchMonitoringStatus();
+      }, 10000);
+
+      return () => clearInterval(statusPoll);
     }
   }, [tab]);
 
@@ -1851,6 +1910,9 @@ export default function AdminPage() {
                   Monitora Ora
                 </button>
               </div>
+              {monitoringStatusText && (
+                <p className="text-xs text-zinc-500 mb-4">{monitoringStatusText}</p>
+              )}
               <p className="text-sm text-zinc-500 mb-4">
                 Aggiungi artisti italiani per ricevere notifiche quando escono nuovi album in preorder
               </p>
