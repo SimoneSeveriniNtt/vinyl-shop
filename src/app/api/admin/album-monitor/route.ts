@@ -64,6 +64,41 @@ function parseReleaseDate(text: string): string | undefined {
   return dateMatch?.[1];
 }
 
+function extractIbsStructuredAlbums(html: string, artist: string, searchUrl: string): AlbumFound[] {
+  const normalizedArtist = normalizeArtistName(artist);
+  const results: AlbumFound[] = [];
+  const seen = new Set<string>();
+
+  const objectRegex = /\{[^{}]{0,12000}?"delivery_availability":"Disponibile dal\s+\d{1,2}\s+[A-Za-z\u00C0-\u017F]+\s+\d{4}"[^{}]{0,12000}?\}/gi;
+
+  for (const blockMatch of html.matchAll(objectRegex)) {
+    const block = blockMatch[0] || "";
+    const itemName = (block.match(/"item_name":"([^\"]+)"/i)?.[1] || "").replace(/\s+/g, " ").trim();
+    const itemAuthor = (block.match(/"item_author":"([^\"]+)"/i)?.[1] || "").replace(/\s+/g, " ").trim();
+    const releaseDate = (block.match(/"delivery_availability":"Disponibile dal\s+(\d{1,2}\s+[A-Za-z\u00C0-\u017F]+\s+\d{4})"/i)?.[1] || "").trim();
+
+    if (!itemName || !itemAuthor || !releaseDate) continue;
+
+    const normalizedAuthor = normalizeArtistName(itemAuthor);
+    const isSameArtist = normalizedAuthor.includes(normalizedArtist) || normalizedArtist.includes(normalizedAuthor);
+    if (!isSameArtist) continue;
+
+    const dedupeKey = `${normalizeAlbumTitle(itemName)}|${releaseDate.toLowerCase()}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    results.push({
+      artist_name: artist,
+      album_title: itemName,
+      source: "IBS",
+      release_date: releaseDate,
+      retailer_url: searchUrl,
+    });
+  }
+
+  return results;
+}
+
 function extractFallbackAlbums(
   html: string,
   artist: string,
@@ -271,19 +306,23 @@ async function scanIBS(artistNames: string[]): Promise<AlbumFound[]> {
     if (!html) return [] as AlbumFound[];
 
     const results: AlbumFound[] = [];
-    const preorderMatches = html.matchAll(/Disponibile\s+dal\s+(\d+\s+\w+\s+\d{4})/gi);
-    for (const match of preorderMatches) {
-      const releaseDate = match[1];
-      results.push({
-        artist_name: artist,
-        album_title: `Album ${artist}`,
-        source: "IBS",
-        release_date: releaseDate,
-        retailer_url: searchUrl,
-      });
-    }
 
-    if (results.length === 0) {
+    const structuredResults = extractIbsStructuredAlbums(html, artist, searchUrl);
+    if (structuredResults.length > 0) {
+      results.push(...structuredResults);
+    } else {
+      const preorderMatches = html.matchAll(/Disponibile\s+dal\s+(\d+\s+\w+\s+\d{4})/gi);
+      for (const match of preorderMatches) {
+        const releaseDate = match[1];
+        results.push({
+          artist_name: artist,
+          album_title: `Album ${artist}`,
+          source: "IBS",
+          release_date: releaseDate,
+          retailer_url: searchUrl,
+        });
+      }
+
       results.push(...extractFallbackAlbums(html, artist, "IBS", searchUrl));
     }
 
