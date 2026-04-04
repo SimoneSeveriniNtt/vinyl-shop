@@ -1103,11 +1103,11 @@ export default function AdminPage() {
                     Classifica automatica nuove uscite e possibili rarita per aiutarti negli acquisti di rivendita.
                   </p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-stretch">
                   <select
                     value={radarGenre}
                     onChange={(e) => setRadarGenre(e.target.value)}
-                    className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    className="lg:col-span-2 w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
                   >
                     <option value="rock">Rock</option>
                     <option value="pop">Pop Italiano</option>
@@ -1127,11 +1127,11 @@ export default function AdminPage() {
                       }
                     }}
                     placeholder="Filtra per artista (es. Mina, Calibro 35)"
-                    className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none w-full sm:w-72"
+                    className="lg:col-span-3 w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
                   />
                   <button
                     onClick={applyRadarArtistFilter}
-                    className="inline-flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                    className="lg:col-span-1 w-full inline-flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                   >
                     Cerca artista
                   </button>
@@ -1146,18 +1146,18 @@ export default function AdminPage() {
                       }
                     }}
                     placeholder="Cerca titolo/keyword (es. hellvisback, pre order)"
-                    className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none w-full sm:w-80"
+                    className="lg:col-span-3 w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
                   />
                   <button
                     onClick={applyRadarTextFilter}
-                    className="inline-flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                    className="lg:col-span-1 w-full inline-flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                   >
                     Cerca keyword
                   </button>
                   <select
                     value={radarMinScore}
                     onChange={(e) => setRadarMinScore(Number(e.target.value))}
-                    className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    className="lg:col-span-2 w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
                   >
                     <option value={0}>Score minimo: nessuno</option>
                     <option value={50}>Score minimo: 50+</option>
@@ -1165,7 +1165,7 @@ export default function AdminPage() {
                     <option value={75}>Score minimo: 75+</option>
                     <option value={85}>Score minimo: 85+</option>
                   </select>
-                  <label className="inline-flex items-center gap-2 text-sm text-zinc-700 px-3 py-2.5 border border-zinc-200 rounded-xl bg-white">
+                  <label className="lg:col-span-2 inline-flex items-center gap-2 text-sm text-zinc-700 px-3 py-2.5 border border-zinc-200 rounded-xl bg-white w-full">
                     <input
                       type="checkbox"
                       checked={radarUpcomingOnly}
@@ -1177,7 +1177,7 @@ export default function AdminPage() {
                   <button
                     onClick={() => void fetchMarketRadar(1, false)}
                     disabled={radarLoading}
-                    className="inline-flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                    className="lg:col-span-2 w-full inline-flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                   >
                     {radarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
                     Aggiorna ricerca
