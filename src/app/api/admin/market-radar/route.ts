@@ -19,6 +19,8 @@ interface MarketRadarItem {
   title: string;
   artist: string;
   releaseDate: string | null;
+  releaseStatus: "Pre-order" | "In uscita" | "Uscito" | "Data incerta";
+  daysToRelease: number | null;
   country: string;
   raritySignals: string[];
   opportunityScore: number;
@@ -81,24 +83,49 @@ function scoreRelease(release: MusicBrainzRelease): MarketRadarItem {
     }
   }
 
+  const preorderPattern = /pre[-\s]?order|preordine|in uscita|coming soon|annunciato/;
+  const hasPreorderSignal = preorderPattern.test(text);
+  if (hasPreorderSignal) {
+    raritySignals.push("Pre-order");
+  }
+
   const now = new Date();
+  const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const releaseDate = release.date ? new Date(release.date) : null;
+  const hasValidReleaseDate = Boolean(releaseDate && !Number.isNaN(releaseDate.getTime()));
+
+  let releaseStatus: MarketRadarItem["releaseStatus"] = "Data incerta";
+  let daysToRelease: number | null = null;
 
   let recencyScore = 10;
-  if (releaseDate && !Number.isNaN(releaseDate.getTime())) {
-    const diffMs = now.getTime() - releaseDate.getTime();
-    const days = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  if (hasValidReleaseDate && releaseDate) {
+    const releaseStart = new Date(releaseDate.getFullYear(), releaseDate.getMonth(), releaseDate.getDate());
+    const deltaDays = Math.ceil((releaseStart.getTime() - nowStart.getTime()) / (1000 * 60 * 60 * 24));
 
-    if (days <= 14) recencyScore = 35;
-    else if (days <= 30) recencyScore = 30;
-    else if (days <= 60) recencyScore = 24;
-    else if (days <= 120) recencyScore = 18;
-    else recencyScore = 10;
+    if (deltaDays > 0) {
+      daysToRelease = deltaDays;
+      releaseStatus = hasPreorderSignal ? "Pre-order" : "In uscita";
+
+      if (deltaDays <= 7) recencyScore = 38;
+      else if (deltaDays <= 30) recencyScore = 34;
+      else if (deltaDays <= 90) recencyScore = 26;
+      else recencyScore = 18;
+    } else {
+      releaseStatus = "Uscito";
+      const daysSinceRelease = Math.abs(deltaDays);
+
+      if (daysSinceRelease <= 14) recencyScore = 35;
+      else if (daysSinceRelease <= 30) recencyScore = 30;
+      else if (daysSinceRelease <= 60) recencyScore = 24;
+      else if (daysSinceRelease <= 120) recencyScore = 18;
+      else recencyScore = 10;
+    }
   }
 
   const italianBonus = release.country === "IT" ? 15 : 0;
+  const preorderBonus = hasPreorderSignal ? 12 : 0;
   const baseScore = 20;
-  const score = Math.min(100, baseScore + recencyScore + rarityScore + italianBonus);
+  const score = Math.min(100, baseScore + recencyScore + rarityScore + italianBonus + preorderBonus);
 
   let recommendation: "Alta" | "Media" | "Bassa" = "Bassa";
   if (score >= 75) recommendation = "Alta";
@@ -109,6 +136,8 @@ function scoreRelease(release: MusicBrainzRelease): MarketRadarItem {
     title,
     artist: release["artist-credit"]?.map((a) => a.name).join(", ") || "Artista non disponibile",
     releaseDate: release.date || null,
+    releaseStatus,
+    daysToRelease,
     country: release.country || "N/D",
     raritySignals,
     opportunityScore: score,
@@ -209,6 +238,7 @@ export async function GET(req: NextRequest) {
     const artist = (req.nextUrl.searchParams.get("artist") || "").trim();
     const q = (req.nextUrl.searchParams.get("q") || "").trim();
     const minScore = Math.max(0, Math.min(100, Number.parseInt(req.nextUrl.searchParams.get("minScore") || "0", 10) || 0));
+    const upcomingOnly = req.nextUrl.searchParams.get("upcomingOnly") === "1";
     const page = Math.max(1, Number.parseInt(req.nextUrl.searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(40, Math.max(5, Number.parseInt(req.nextUrl.searchParams.get("limit") || "20", 10) || 20));
 
@@ -221,6 +251,7 @@ export async function GET(req: NextRequest) {
     const qLower = q.toLowerCase();
     const filtered = ranked.filter((item) => {
       if (item.opportunityScore < minScore) return false;
+      if (upcomingOnly && item.releaseStatus === "Uscito") return false;
       if (!qLower) return true;
 
       const haystack = `${item.title} ${item.artist} ${item.raritySignals.join(" ")}`.toLowerCase();
@@ -238,6 +269,7 @@ export async function GET(req: NextRequest) {
       artist,
       q,
       minScore,
+      upcomingOnly,
       page,
       limit,
       total: filtered.length,

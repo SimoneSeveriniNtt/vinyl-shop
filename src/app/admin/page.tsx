@@ -57,6 +57,8 @@ interface MarketRadarItem {
   title: string;
   artist: string;
   releaseDate: string | null;
+  releaseStatus: "Pre-order" | "In uscita" | "Uscito" | "Data incerta";
+  daysToRelease: number | null;
   country: string;
   raritySignals: string[];
   opportunityScore: number;
@@ -92,6 +94,7 @@ export default function AdminPage() {
   const [radarQueryInput, setRadarQueryInput] = useState("");
   const [radarQueryFilter, setRadarQueryFilter] = useState("");
   const [radarMinScore, setRadarMinScore] = useState(0);
+  const [radarUpcomingOnly, setRadarUpcomingOnly] = useState(false);
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarLoadingMore, setRadarLoadingMore] = useState(false);
   const [radarError, setRadarError] = useState("");
@@ -157,6 +160,9 @@ export default function AdminPage() {
       if (radarMinScore > 0) {
         params.set("minScore", String(radarMinScore));
       }
+      if (radarUpcomingOnly) {
+        params.set("upcomingOnly", "1");
+      }
 
       const res = await fetch(`/api/admin/market-radar?${params.toString()}`, {
         headers: {
@@ -185,7 +191,7 @@ export default function AdminPage() {
       setRadarLoading(false);
       setRadarLoadingMore(false);
     }
-  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore]);
+  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore, radarUpcomingOnly]);
 
   useEffect(() => {
     if (!user) return;
@@ -211,7 +217,7 @@ export default function AdminPage() {
     setRadarPage(1);
     setRadarHasMore(false);
     setRadarTotal(0);
-  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore]);
+  }, [radarGenre, radarArtistFilter, radarQueryFilter, radarMinScore, radarUpcomingOnly]);
 
   function applyRadarArtistFilter() {
     setRadarArtistFilter(radarArtistInput.trim());
@@ -1157,6 +1163,15 @@ export default function AdminPage() {
                     <option value={75}>Score minimo: 75+</option>
                     <option value={85}>Score minimo: 85+</option>
                   </select>
+                  <label className="inline-flex items-center gap-2 text-sm text-zinc-700 px-3 py-2.5 border border-zinc-200 rounded-xl bg-white">
+                    <input
+                      type="checkbox"
+                      checked={radarUpcomingOnly}
+                      onChange={(e) => setRadarUpcomingOnly(e.target.checked)}
+                      className="w-4 h-4 rounded border-zinc-300 text-amber-500 focus:ring-amber-400"
+                    />
+                    Solo in uscita/pre-order
+                  </label>
                   <button
                     onClick={() => void fetchMarketRadar(1, false)}
                     disabled={radarLoading}
@@ -1190,6 +1205,7 @@ export default function AdminPage() {
                   {radarArtistFilter ? ` • filtro artista: ${radarArtistFilter}` : ""}
                   {radarQueryFilter ? ` • keyword: ${radarQueryFilter}` : ""}
                   {radarMinScore > 0 ? ` • score >= ${radarMinScore}` : ""}
+                  {radarUpcomingOnly ? " • solo in uscita/pre-order" : ""}
                 </p>
                 {radarItems.map((item) => (
                   <div key={item.id} className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
@@ -1200,6 +1216,22 @@ export default function AdminPage() {
                         <div className="flex flex-wrap gap-2 mt-2 text-xs text-zinc-500">
                           <span className="bg-zinc-100 px-2 py-1 rounded-full">Data: {item.releaseDate || "N/D"}</span>
                           <span className="bg-zinc-100 px-2 py-1 rounded-full">Paese: {item.country}</span>
+                          <span className={`px-2 py-1 rounded-full ${
+                            item.releaseStatus === "Pre-order"
+                              ? "bg-blue-100 text-blue-700"
+                              : item.releaseStatus === "In uscita"
+                              ? "bg-purple-100 text-purple-700"
+                              : item.releaseStatus === "Uscito"
+                              ? "bg-zinc-100 text-zinc-700"
+                              : "bg-zinc-100 text-zinc-500"
+                          }`}>
+                            Stato: {item.releaseStatus}
+                          </span>
+                          {item.daysToRelease !== null && item.daysToRelease > 0 && (
+                            <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+                              Esce tra {item.daysToRelease} giorni
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 sm:flex-col sm:items-end">
