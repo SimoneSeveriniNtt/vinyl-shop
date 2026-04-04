@@ -89,6 +89,7 @@ export default function AdminPage() {
   const [radarGenre, setRadarGenre] = useState("rock");
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarError, setRadarError] = useState("");
+  const [radarAutoFetched, setRadarAutoFetched] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -144,6 +145,7 @@ export default function AdminPage() {
       setRadarError(error instanceof Error ? error.message : "Errore caricamento radar");
       setRadarItems([]);
     } finally {
+      setRadarAutoFetched(true);
       setRadarLoading(false);
     }
   }, [radarGenre]);
@@ -160,10 +162,16 @@ export default function AdminPage() {
   }, [user]);
 
   useEffect(() => {
-    if (tab === "radar" && radarItems.length === 0 && !radarLoading) {
+    if (tab === "radar" && !radarAutoFetched && !radarLoading) {
       void fetchMarketRadar();
     }
-  }, [tab, radarItems.length, radarLoading, fetchMarketRadar]);
+  }, [tab, radarAutoFetched, radarLoading, fetchMarketRadar]);
+
+  useEffect(() => {
+    setRadarAutoFetched(false);
+    setRadarError("");
+    setRadarItems([]);
+  }, [radarGenre]);
 
   function radarBadgeClass(score: number): string {
     if (score >= 75) return "bg-green-100 text-green-700";
