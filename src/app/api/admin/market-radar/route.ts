@@ -35,6 +35,7 @@ interface RadarQueryOptions {
   genreKey: string;
   artistFilter: string;
   textFilter: string;
+  upcomingOnly?: boolean;
 }
 
 const GENRE_TERMS: Record<string, string[]> = {
@@ -265,7 +266,7 @@ function escapeQueryValue(value: string): string {
 }
 
 async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<MusicBrainzRelease[]> {
-  const { genreKey, artistFilter, textFilter } = options;
+  const { genreKey, artistFilter, textFilter, upcomingOnly } = options;
   const currentYear = new Date().getFullYear();
   const previousYear = currentYear - 1;
   const nextYear = currentYear + 1;
@@ -278,18 +279,39 @@ async function fetchMusicBrainzReleases(options: RadarQueryOptions): Promise<Mus
     ? `(release:\"${escapedText}\" OR artist:\"${escapedText}\" OR tag:${escapedText})`
     : "";
 
+  // Special pre-order focused date window: today to 6 months ahead
+  const today = new Date();
+  const sixMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate());
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const sixMonthsStr = `${sixMonthsAhead.getFullYear()}-${String(sixMonthsAhead.getMonth() + 1).padStart(2, '0')}-${String(sixMonthsAhead.getDate()).padStart(2, '0')}`;
+  const upcomingDateClause = `date:[${todayStr} TO ${sixMonthsStr}]`;
+  
   const baseDateClause = `date:[${previousYear}-01-01 TO ${nextYear}-12-31]`;
-  const candidateQueries = artistClause || textClause
-    ? [
-        `country:IT AND ${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")} AND (${genreClause})`,
-        `country:IT AND ${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
-        `${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
-      ]
-    : [
-        `country:IT AND ${baseDateClause} AND (${genreClause})`,
-        `country:IT AND ${baseDateClause}`,
-        `${baseDateClause} AND (${genreClause})`,
-      ];
+  
+  let candidateQueries: string[] = [];
+  
+  if (upcomingOnly && !artistClause && !textClause) {
+    // Special: pre-order discovery without artist/keyword → focus on upcoming releases in genre
+    candidateQueries = [
+      `country:IT AND ${upcomingDateClause} AND (${genreClause})`,
+      `country:IT AND ${upcomingDateClause}`,
+      `${upcomingDateClause} AND (${genreClause})`,
+    ];
+  } else if (artistClause || textClause) {
+    // Normal: artist or text search
+    candidateQueries = [
+      `country:IT AND ${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")} AND (${genreClause})`,
+      `country:IT AND ${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
+      `${baseDateClause} AND ${[artistClause, textClause].filter(Boolean).join(" AND ")}`,
+    ];
+  } else {
+    // Genre-only search
+    candidateQueries = [
+      `country:IT AND ${baseDateClause} AND (${genreClause})`,
+      `country:IT AND ${baseDateClause}`,
+      `${baseDateClause} AND (${genreClause})`,
+    ];
+  }
 
   if (artistClause) {
     // Artist-direct fallback avoids missing releases when metadata lacks country/genre tags.
@@ -366,7 +388,7 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, Number.parseInt(req.nextUrl.searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(40, Math.max(5, Number.parseInt(req.nextUrl.searchParams.get("limit") || "20", 10) || 20));
 
-    const releases = await fetchMusicBrainzReleases({ genreKey: genre, artistFilter: artist, textFilter: q });
+    const releases = await fetchMusicBrainzReleases({ genreKey: genre, artistFilter: artist, textFilter: q, upcomingOnly });
     const intelItems = buildMarketIntelItems(artist, q);
 
     const ranked = releases

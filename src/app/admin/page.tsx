@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Genre, Vinyl, CONDITIONS, CONDITION_LABELS } from "@/lib/types";
-import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink, SlidersHorizontal } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import AdminLogin from "@/components/AdminLogin";
 import ImageUpload from "@/components/ImageUpload";
@@ -99,7 +99,6 @@ export default function AdminPage() {
   const [radarQueryFilter, setRadarQueryFilter] = useState("");
   const [radarMinScore, setRadarMinScore] = useState(0);
   const [radarUpcomingOnly, setRadarUpcomingOnly] = useState(false);
-  const [radarShowAdvancedFilters, setRadarShowAdvancedFilters] = useState(false);
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarLoadingMore, setRadarLoadingMore] = useState(false);
   const [radarError, setRadarError] = useState("");
@@ -1097,8 +1096,8 @@ export default function AdminPage() {
           <>
             <div className="sticky top-3 z-20 bg-zinc-50/95 backdrop-blur supports-[backdrop-filter]:bg-zinc-50/80 rounded-2xl mb-5">
               <div className="bg-white rounded-2xl shadow-sm p-5">
-                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                <div>
+                {/* Header */}
+                <div className="mb-5">
                   <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-amber-500" />
                     Radar Opportunita Vinili Italia
@@ -1107,99 +1106,87 @@ export default function AdminPage() {
                     Classifica automatica nuove uscite e possibili rarita per aiutarti negli acquisti di rivendita.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 self-start md:hidden">
-                  <button
-                    type="button"
-                    onClick={() => setRadarShowAdvancedFilters((prev) => !prev)}
-                    className="inline-flex items-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-3 py-2 rounded-xl text-sm font-semibold transition-colors"
-                  >
-                    <SlidersHorizontal className="w-4 h-4" />
-                    Filtri avanzati
-                  </button>
+
+                {/* RICERCA Section */}
+                <div className="mb-5 pb-5 border-b border-zinc-200">
+                  <p className="text-xs font-semibold uppercase text-zinc-600 mb-3 tracking-wide">Ricerca</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={radarArtistInput}
+                      onChange={(e) => setRadarArtistInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          applyRadarArtistFilter();
+                        }
+                      }}
+                      placeholder="Artista (es. Madame, Sayf)"
+                      className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={radarQueryInput}
+                      onChange={(e) => setRadarQueryInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          applyRadarTextFilter();
+                        }
+                      }}
+                      placeholder="Titolo / Keyword (es. pre order)"
+                      className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 items-stretch">
-                  <select
-                    value={radarGenre}
-                    onChange={(e) => setRadarGenre(e.target.value)}
-                    className="w-full sm:w-[220px] px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                  >
-                    <option value="rock">Rock</option>
-                    <option value="pop">Pop Italiano</option>
-                    <option value="jazz">Jazz</option>
-                    <option value="hiphop">Hip Hop / Rap</option>
-                    <option value="elettronica">Elettronica</option>
-                    <option value="colonne">Colonne Sonore</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={radarArtistInput}
-                    onChange={(e) => setRadarArtistInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        applyRadarArtistFilter();
-                      }
-                    }}
-                    placeholder="Filtra per artista (es. Mina, Calibro 35)"
-                    className="flex-1 min-w-[240px] px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                  />
-                  <button
-                    onClick={applyRadarArtistFilter}
-                    className={`${radarShowAdvancedFilters ? "" : "hidden"} md:inline-flex w-full sm:w-auto sm:min-w-[140px] whitespace-nowrap items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors`}
-                  >
-                    Cerca artista
-                  </button>
-                  <input
-                    type="text"
-                    value={radarQueryInput}
-                    onChange={(e) => setRadarQueryInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        applyRadarTextFilter();
-                      }
-                    }}
-                    placeholder="Cerca titolo/keyword (es. hellvisback, pre order)"
-                    className={`${radarShowAdvancedFilters ? "" : "hidden"} md:block flex-1 min-w-[260px] px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none`}
-                  />
-                  <button
-                    onClick={applyRadarTextFilter}
-                    className={`${radarShowAdvancedFilters ? "" : "hidden"} md:inline-flex w-full sm:w-auto sm:min-w-[150px] whitespace-nowrap items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors`}
-                  >
-                    Cerca keyword
-                  </button>
-                  <select
-                    value={radarMinScore}
-                    onChange={(e) => setRadarMinScore(Number(e.target.value))}
-                    className={`${radarShowAdvancedFilters ? "" : "hidden"} md:block w-full sm:w-[200px] px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none`}
-                  >
-                    <option value={0}>Score minimo: nessuno</option>
-                    <option value={50}>Score minimo: 50+</option>
-                    <option value={65}>Score minimo: 65+</option>
-                    <option value={75}>Score minimo: 75+</option>
-                    <option value={85}>Score minimo: 85+</option>
-                  </select>
-                  <label className={`${radarShowAdvancedFilters ? "" : "hidden"} md:inline-flex items-center gap-2 text-sm text-zinc-700 px-3 py-2.5 border border-zinc-200 rounded-xl bg-white w-full sm:w-auto sm:min-w-[220px]`}>
-                    <input
-                      type="checkbox"
-                      checked={radarUpcomingOnly}
-                      onChange={(e) => setRadarUpcomingOnly(e.target.checked)}
-                      className="w-4 h-4 rounded border-zinc-300 text-amber-500 focus:ring-amber-400"
-                    />
-                    Solo in uscita/pre-order
-                  </label>
-                  <button
-                    onClick={() => void fetchMarketRadar(1, false)}
-                    disabled={radarLoading}
-                    className="w-full sm:w-auto sm:min-w-[210px] whitespace-nowrap inline-flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-                  >
-                    {radarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
-                    Aggiorna ricerca
-                  </button>
+                {/* FILTRI Section */}
+                <div className="mb-5">
+                  <p className="text-xs font-semibold uppercase text-zinc-600 mb-3 tracking-wide">Filtri</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    <select
+                      value={radarGenre}
+                      onChange={(e) => setRadarGenre(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    >
+                      <option value="rock">Genere: Rock</option>
+                      <option value="pop">Genere: Pop Italiano</option>
+                      <option value="jazz">Genere: Jazz</option>
+                      <option value="hiphop">Genere: Hip Hop / Rap</option>
+                      <option value="elettronica">Genere: Elettronica</option>
+                      <option value="colonne">Genere: Colonne Sonore</option>
+                    </select>
+                    <select
+                      value={radarMinScore}
+                      onChange={(e) => setRadarMinScore(Number(e.target.value))}
+                      className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    >
+                      <option value={0}>Score: qualsiasi</option>
+                      <option value={50}>Score: 50+</option>
+                      <option value={65}>Score: 65+</option>
+                      <option value={75}>Score: 75+</option>
+                      <option value={85}>Score: 85+</option>
+                    </select>
+                    <label className="col-span-1 sm:col-span-2 lg:col-span-1 flex items-center gap-2 px-4 py-2.5 border border-zinc-200 rounded-xl bg-white hover:bg-zinc-50 cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={radarUpcomingOnly}
+                        onChange={(e) => setRadarUpcomingOnly(e.target.checked)}
+                        className="w-4 h-4 rounded border-zinc-300 text-amber-500 focus:ring-amber-400"
+                      />
+                      <span className="text-sm text-zinc-700 font-medium">Uscite prossime</span>
+                    </label>
+                    <button
+                      onClick={() => void fetchMarketRadar(1, false)}
+                      disabled={radarLoading}
+                      className="col-span-1 sm:col-span-2 lg:col-span-1 inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                    >
+                      {radarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
+                      Cerca
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
             </div>
 
             {radarError && (
@@ -1214,13 +1201,13 @@ export default function AdminPage() {
               </div>
             ) : radarItems.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
-                <p className="text-zinc-500">Nessun risultato disponibile per questa categoria.</p>
+                <p className="text-zinc-500">Nessun risultato disponibile per questa ricerca.</p>
               </div>
             ) : (
               <div className="space-y-3">
                 <p className="text-xs text-zinc-500">
                   {radarTotal > 0 ? `Risultati trovati: ${radarTotal}` : "Nessun risultato"}
-                  {radarArtistFilter ? ` • filtro artista: ${radarArtistFilter}` : ""}
+                  {radarArtistFilter ? ` • artista: ${radarArtistFilter}` : ""}
                   {radarQueryFilter ? ` • keyword: ${radarQueryFilter}` : ""}
                   {radarMinScore > 0 ? ` • score >= ${radarMinScore}` : ""}
                   {radarUpcomingOnly ? " • solo in uscita/pre-order" : ""}
