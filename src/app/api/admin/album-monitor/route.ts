@@ -59,6 +59,76 @@ interface AlbumFound {
   price_eur?: number;
 }
 
+function parseReleaseDate(text: string): string | undefined {
+  const dateMatch = text.match(/(\d{1,2}\s+[A-Za-z\u00C0-\u017F]+\s+\d{4})/i);
+  return dateMatch?.[1];
+}
+
+function extractFallbackAlbums(
+  html: string,
+  artist: string,
+  source: "Feltrinelli" | "IBS",
+  searchUrl: string
+): AlbumFound[] {
+  const normalizedArtist = normalizeArtistName(artist);
+  const globalHasPreorderWords = /pre\s*-?\s*order|in\s+prenotazione|in\s+uscita|uscita\s+prevista|disponibile\s+dal|prossimament/i.test(html);
+  if (!globalHasPreorderWords) return [];
+
+  const matches = [...html.matchAll(/<a[^>]*href="([^"]+)"[^>]*>([^<]{1,220})<\/a>/gi)];
+  const results: AlbumFound[] = [];
+  const seen = new Set<string>();
+
+  for (const match of matches) {
+    if (results.length >= 4) break;
+
+    const href = match[1] || "";
+    const rawTitle = (match[2] || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (!rawTitle || rawTitle.length < 8 || rawTitle.length > 180) continue;
+
+    const normalizedTitle = normalizeArtistName(rawTitle);
+    const titleHasArtist = normalizedTitle.includes(normalizedArtist);
+    const titleHasMusicSignal = /vinile|vinyl|lp|album/i.test(rawTitle);
+    if (!titleHasArtist && !titleHasMusicSignal) continue;
+
+    const start = Math.max(0, match.index - 220);
+    const end = Math.min(html.length, match.index + 420);
+    const context = html.slice(start, end);
+    const contextHasPreorder = /pre\s*-?\s*order|in\s+prenotazione|in\s+uscita|uscita\s+prevista|disponibile\s+dal|prossimament/i.test(context);
+    if (!contextHasPreorder) continue;
+
+    const releaseDate = parseReleaseDate(context);
+    const dedupeKey = `${rawTitle.toLowerCase()}|${source}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    const absoluteUrl = href.startsWith("http")
+      ? href
+      : `https://${source === "IBS" ? "www.ibs.it" : "www.feltrinelli.it"}${href.startsWith("/") ? href : `/${href}`}`;
+
+    results.push({
+      artist_name: artist,
+      album_title: rawTitle,
+      source,
+      release_date: releaseDate,
+      retailer_url: absoluteUrl || searchUrl,
+    });
+  }
+
+  return results;
+}
+
+function dedupeAlbums(albums: AlbumFound[]): AlbumFound[] {
+  const seen = new Set<string>();
+  const deduped: AlbumFound[] = [];
+  for (const album of albums) {
+    const key = `${normalizeArtistName(album.artist_name)}|${normalizeAlbumTitle(album.album_title || "")}|${album.source}|${(album.release_date || "").toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(album);
+  }
+  return deduped;
+}
+
 function hasMonitorStateTableError(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
   const msg = (error.message || "").toLowerCase();
@@ -183,7 +253,11 @@ async function scanFeltrinelli(artistNames: string[]): Promise<AlbumFound[]> {
       });
     }
 
-    return results;
+    if (results.length === 0) {
+      results.push(...extractFallbackAlbums(html, artist, "Feltrinelli", searchUrl));
+    }
+
+    return dedupeAlbums(results);
   });
 
   return perArtist.flat();
@@ -192,7 +266,7 @@ async function scanFeltrinelli(artistNames: string[]): Promise<AlbumFound[]> {
 // Scansiona IBS per album degli artisti monitorati
 async function scanIBS(artistNames: string[]): Promise<AlbumFound[]> {
   const perArtist = await mapWithConcurrency(artistNames, SCAN_CONCURRENCY, async (artist) => {
-    const searchUrl = `https://www.ibs.it/ricerca/?q=${encodeURIComponent(artist)}%20vinile`;
+    const searchUrl = `https://www.ibs.it/search/?query=${encodeURIComponent(artist)}%20vinile`;
     const html = await fetchTextWithTimeout(searchUrl);
     if (!html) return [] as AlbumFound[];
 
@@ -209,7 +283,11 @@ async function scanIBS(artistNames: string[]): Promise<AlbumFound[]> {
       });
     }
 
-    return results;
+    if (results.length === 0) {
+      results.push(...extractFallbackAlbums(html, artist, "IBS", searchUrl));
+    }
+
+    return dedupeAlbums(results);
   });
 
   return perArtist.flat();
