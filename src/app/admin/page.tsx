@@ -1934,23 +1934,36 @@ export default function AdminPage() {
               )}
               {monitoringTotalCount > 0 && (
                 <div className="mb-4">
+                  {(() => {
+                    const progress = Math.min(
+                      100,
+                      Math.round((monitoringProcessedCount / monitoringTotalCount) * 100)
+                    );
+                    const progressColorClass =
+                      progress < 35
+                        ? "bg-red-500"
+                        : progress < 75
+                          ? "bg-amber-500"
+                          : "bg-emerald-500";
+
+                    return (
+                      <>
                   <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-1.5">
                     <span>Progresso monitoraggio</span>
-                    <span>
-                      {Math.min(100, Math.round((monitoringProcessedCount / monitoringTotalCount) * 100))}%
-                    </span>
+                    <span>{progress}%</span>
                   </div>
                   <div className="w-full h-2 rounded-full bg-zinc-200 overflow-hidden">
                     <div
-                      className="h-full bg-emerald-500 transition-all duration-500"
-                      style={{
-                        width: `${Math.min(100, Math.round((monitoringProcessedCount / monitoringTotalCount) * 100))}%`,
-                      }}
+                      className={`h-full ${progressColorClass} transition-all duration-500`}
+                      style={{ width: `${progress}%` }}
                     />
                   </div>
                   <p className="mt-1 text-[11px] text-zinc-500">
                     {monitoringProcessedCount}/{monitoringTotalCount} artisti elaborati
                   </p>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
               <p className="text-sm text-zinc-500 mb-4">
