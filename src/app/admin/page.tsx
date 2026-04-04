@@ -240,6 +240,21 @@ export default function AdminPage() {
     }
   }
 
+  function radarRarityLabel(rarity: string): string {
+    switch (rarity) {
+      case "Collectible":
+        return "Da Collezione";
+      case "Very Rare":
+        return "Molto Raro";
+      case "Rare":
+        return "Raro";
+      case "Uncommon":
+        return "Non Comune";
+      default:
+        return "Comune";
+    }
+  }
+
   async function updateOrderStatus(id: string, status: string) {
     await supabase.from("orders").update({ status }).eq("id", id);
     fetchOrders();
@@ -1193,9 +1208,9 @@ export default function AdminPage() {
                         className="w-full h-2 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
                       />
                       <div className="flex justify-between text-xs text-zinc-500 mt-1">
-                        <span>Common (0)</span>
-                        <span>Rare (50)</span>
-                        <span>Collectible (100)</span>
+                        <span>Comune (0)</span>
+                        <span>Raro (50)</span>
+                        <span>Da Collezione (100)</span>
                       </div>
                     </div>
                     <button
@@ -1281,7 +1296,7 @@ export default function AdminPage() {
                             )}
                           </div>
                           <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${radarRarityBadge(item.estimated_rarity)}`}>
-                            {item.estimated_rarity}
+                            {radarRarityLabel(item.estimated_rarity)}
                           </span>
                         </div>
 

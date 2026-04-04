@@ -1,4 +1,4 @@
-import type { DiscogsRadarItem, RaritySignal } from "@/lib/discogs";
+import { rarityLabelIt, type DiscogsRadarItem, type RaritySignal } from "@/lib/discogs";
 
 interface WebResult {
   title: string;
@@ -208,6 +208,7 @@ async function fetchStorePreorders(
 
     const score = computeScore(signals, isPreorder);
     const category = toCategory(score);
+    const categoryIt = rarityLabelIt(category);
     const priceNum = typeof p.price === "number" ? p.price : Number.parseFloat(String(p.price || "").replace(",", "."));
 
     mapped.push({
@@ -230,7 +231,7 @@ async function fetchStorePreorders(
       discogs_url: url,
       resource_url: url,
       images: [],
-      rarity_description: `${category}. ${isPreorder ? "Pre-order attivo" : "Disponibilità standard"}. ${signals.map((s) => s.description).join(", ") || "Nessun segnale specifico"}.`,
+      rarity_description: `${categoryIt}. ${isPreorder ? "Pre-order attivo" : "Disponibilità standard"}. ${signals.map((s) => s.description).join(", ") || "Nessun segnale specifico"}.`,
       marketplace: {
         have: 0,
         want: 0,
@@ -299,6 +300,7 @@ export async function searchWebPreorderIntel(input: {
     const signals = computeSignals(text);
     const score = computeScore(signals, true);
     const category = toCategory(score);
+    const categoryIt = rarityLabelIt(category);
     const store = extractStoreName(result.link);
 
     return {
@@ -321,7 +323,7 @@ export async function searchWebPreorderIntel(input: {
       discogs_url: result.link,
       resource_url: result.link,
       images: [],
-      rarity_description: `${category}. Segnali: ${signals.map((s) => s.description).join(", ") || "Pre-order generic"}. Fonte: ${store}.`,
+      rarity_description: `${categoryIt}. Segnali: ${signals.map((s) => s.description).join(", ") || "Pre-order generic"}. Fonte: ${store}.`,
       marketplace: {
         have: 0,
         want: 0,

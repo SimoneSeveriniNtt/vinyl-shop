@@ -98,6 +98,21 @@ export interface DiscogsRadarItem {
   };
 }
 
+export function rarityLabelIt(rarity: DiscogsRadarItem["estimated_rarity"]): string {
+  switch (rarity) {
+    case "Collectible":
+      return "Da Collezione";
+    case "Very Rare":
+      return "Molto Raro";
+    case "Rare":
+      return "Raro";
+    case "Uncommon":
+      return "Non Comune";
+    default:
+      return "Comune";
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -282,6 +297,7 @@ export function calculateRarityScore(release: DiscogsReleaseDetail, signals: Rar
 function buildRarityDescription(
   item: Pick<DiscogsRadarItem, "title" | "estimated_rarity" | "rarity_signals" | "marketplace" | "releaseYear" | "formatDetails">
 ): string {
+  const rarityIt = rarityLabelIt(item.estimated_rarity);
   const signalText = item.rarity_signals.length
     ? `Segnali forti: ${item.rarity_signals.slice(0, 3).map((s) => s.description).join(", ")}.`
     : "Nessun segnale testuale forte nella scheda release.";
@@ -301,7 +317,7 @@ function buildRarityDescription(
   const yearText = item.releaseYear ? `Anno release: ${item.releaseYear}.` : "Anno release non disponibile.";
   const formatText = item.formatDetails.length ? `Dettagli formato: ${item.formatDetails.slice(0, 3).join(", ")}.` : "";
 
-  return `${item.estimated_rarity}. ${signalText} ${scarcityText} ${demandText} ${yearText} ${formatText}`.trim();
+  return `${rarityIt}. ${signalText} ${scarcityText} ${demandText} ${yearText} ${formatText}`.trim();
 }
 
 export function matchesGenreFilter(item: DiscogsRadarItem, genreFilter: string): boolean {
