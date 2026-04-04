@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { createClient } from "@supabase/supabase-js";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 20000,
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, ""),
-  },
-});
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // Use service role key for server-side operations (bypasses RLS safely)
 const supabase = createClient(
@@ -29,6 +20,7 @@ const CONDITION_LABELS: Record<string, string> = {
 };
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "simone.severini@gmail.com";
+const RESEND_FROM = process.env.RESEND_FROM || "Vinyl Shop <onboarding@resend.dev>";
 
 interface OrderItem {
   id: string;
@@ -416,30 +408,40 @@ export async function POST(req: NextRequest) {
     // Generate confirmation email HTML for buyer
     const buyerEmailHtml = generateBuyerEmail(customer, items, subtotal, shipping, total, order.id, orderDate);
 
-    const from = `Vinyl Shop <${process.env.GMAIL_USER}>`;
+    // Send emails via Resend. In no-domain mode (onboarding@resend.dev), recipient restrictions may apply.
+    if (!resend) {
+      console.error("Resend API key missing: skipped email sending.");
+    } else {
+      try {
+        const adminResult = await resend.emails.send({
+          from: RESEND_FROM,
+          to: ADMIN_EMAIL,
+          subject: `🎵 Nuovo Ordine #${order.id.substring(0, 8).toUpperCase()} — ${customer.firstName} ${customer.lastName} — €${total.toFixed(2)}`,
+          html: adminEmailHtml,
+          replyTo: customer.email,
+        });
 
-    // Send notification to admin
-    try {
-      await transporter.sendMail({
-        from,
-        to: ADMIN_EMAIL,
-        subject: `🎵 Nuovo Ordine #${order.id.substring(0, 8).toUpperCase()} — ${customer.firstName} ${customer.lastName} — €${total.toFixed(2)}`,
-        html: adminEmailHtml,
-      });
-    } catch (e) {
-      console.error("Admin email error:", e);
-    }
+        if (adminResult.error) {
+          console.error("Admin email error:", adminResult.error);
+        }
+      } catch (e) {
+        console.error("Admin email error:", e);
+      }
 
-    // Send confirmation to buyer
-    try {
-      await transporter.sendMail({
-        from,
-        to: customer.email,
-        subject: `✅ Ordine confermato #${order.id.substring(0, 8).toUpperCase()} — Vinyl Shop`,
-        html: buyerEmailHtml,
-      });
-    } catch (e) {
-      console.error("Buyer email error:", e);
+      try {
+        const buyerResult = await resend.emails.send({
+          from: RESEND_FROM,
+          to: customer.email,
+          subject: `✅ Ordine confermato #${order.id.substring(0, 8).toUpperCase()} — Vinyl Shop`,
+          html: buyerEmailHtml,
+        });
+
+        if (buyerResult.error) {
+          console.error("Buyer email error:", buyerResult.error);
+        }
+      } catch (e) {
+        console.error("Buyer email error:", e);
+      }
     }
 
     return NextResponse.json({ success: true, orderId: order.id });
