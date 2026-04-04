@@ -133,12 +133,18 @@ export default function AdminPage() {
         throw new Error("Sessione admin non valida. Ricarica la pagina e rifai login.");
       }
 
-      if (!radarArtistFilter.trim()) {
+      const effectiveArtist = (radarArtistFilter.trim() || radarArtistInput.trim()).trim();
+
+      if (!effectiveArtist) {
         throw new Error("Inserisci il nome dell'artista");
       }
 
+      if (effectiveArtist !== radarArtistFilter) {
+        setRadarArtistFilter(effectiveArtist);
+      }
+
       const params = new URLSearchParams({
-        artist: radarArtistFilter.trim(),
+        artist: effectiveArtist,
         page: String(page),
         limit: "20",
       });
@@ -186,7 +192,7 @@ export default function AdminPage() {
       setRadarLoading(false);
       setRadarLoadingMore(false);
     }
-  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarPreorderOnly, radarMinRarity]);
+  }, [radarArtistFilter, radarArtistInput, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarPreorderOnly, radarMinRarity]);
 
   useEffect(() => {
     if (!user) return;
@@ -1091,7 +1097,7 @@ export default function AdminPage() {
 
         {tab === "radar" && (
           <>
-            <div className="sticky top-3 z-20 bg-zinc-50/95 backdrop-blur supports-[backdrop-filter]:bg-zinc-50/80 rounded-2xl mb-5">
+            <div className="bg-zinc-50 rounded-2xl mb-5">
               <div className="bg-white rounded-2xl shadow-sm p-5">
                 {/* Header */}
                 <div className="mb-5">
@@ -1194,7 +1200,7 @@ export default function AdminPage() {
                     </div>
                     <button
                       onClick={() => void fetchDiscogsRadar(1, false)}
-                      disabled={radarLoading || !radarArtistFilter.trim()}
+                      disabled={radarLoading || !radarArtistInput.trim()}
                       className="w-full inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                     >
                       {radarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
