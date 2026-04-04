@@ -171,33 +171,34 @@ export default function AdminPage() {
     if (data) setOrders(data as OrderRow[]);
   }
 
-  async function fetchWatchedArtists() {
-    setAlertsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("watched_artists")
-        .select("*")
-        .eq("is_active", true)
-        .order("added_at", { ascending: false });
-      if (error) throw error;
-      setWatchedArtists(data || []);
-    } catch (err) {
-      setAlertsError(toAlertErrorMessage(err, "Errore caricamento artisti monitorati"));
-    } finally {
-      setAlertsLoading(false);
+  async function getAdminToken(): Promise<string> {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) {
+      throw new Error("Sessione admin non valida. Ricarica la pagina e rifai login.");
     }
+    return token;
   }
 
-  async function fetchAlbumAlerts() {
+  async function fetchAlertData() {
     setAlertsLoading(true);
+    setAlertsError("");
     try {
-      const { data, error } = await supabase
-        .from("album_alerts")
-        .select("*")
-        .order("discovered_at", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      setAlbumAlerts(data || []);
+      const token = await getAdminToken();
+      const res = await fetch("/api/admin/alerts", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = await res.json();
+      if (!res.ok || !payload.success) {
+        throw payload;
+      }
+
+      setWatchedArtists(payload.watchedArtists || []);
+      setAlbumAlerts(payload.albumAlerts || []);
     } catch (err) {
       setAlertsError(toAlertErrorMessage(err, "Errore caricamento alert"));
     } finally {
@@ -212,45 +213,72 @@ export default function AdminPage() {
     }
 
     try {
-      const { error } = await supabase.from("watched_artists").insert({
-        artist_name: newArtistInput.trim(),
-        artist_name_lower: newArtistInput.trim().toLowerCase(),
-        genre: newArtistGenre || null,
+      const token = await getAdminToken();
+      const response = await fetch("/api/admin/alerts", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "addArtist",
+          artistName: newArtistInput.trim(),
+          genre: newArtistGenre || null,
+        }),
       });
-      if (error) throw error;
+
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw payload;
+
       showMessage("success", `${newArtistInput} aggiunto ai monitorati`);
       setNewArtistInput("");
       setNewArtistGenre("Pop");
-      await fetchWatchedArtists();
+      await fetchAlertData();
     } catch (err) {
-      showMessage("error", err instanceof Error ? err.message : "Errore aggiunta artista");
+      showMessage("error", toAlertErrorMessage(err, "Errore aggiunta artista"));
     }
   }
 
   async function removeWatchedArtist(id: string) {
     try {
-      const { error } = await supabase
-        .from("watched_artists")
-        .update({ is_active: false })
-        .eq("id", id);
-      if (error) throw error;
+      const token = await getAdminToken();
+      const response = await fetch("/api/admin/alerts", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "removeArtist", artistId: id }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw payload;
+
       showMessage("success", "Artista rimosso da monitorati");
-      await fetchWatchedArtists();
+      await fetchAlertData();
     } catch (err) {
-      showMessage("error", err instanceof Error ? err.message : "Errore rimozione artista");
+      showMessage("error", toAlertErrorMessage(err, "Errore rimozione artista"));
     }
   }
 
   async function updateAlertStatus(alertId: string, status: "viewed" | "purchased" | "dismissed") {
     try {
-      const { error } = await supabase
-        .from("album_alerts")
-        .update({ status, notified_at: status === "viewed" ? new Date().toISOString() : undefined })
-        .eq("id", alertId);
-      if (error) throw error;
-      await fetchAlbumAlerts();
+      const token = await getAdminToken();
+      const response = await fetch("/api/admin/alerts", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "updateAlertStatus", alertId, status }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw payload;
+
+      await fetchAlertData();
     } catch (err) {
-      showMessage("error", err instanceof Error ? err.message : "Errore aggiornamento alert");
+      showMessage("error", toAlertErrorMessage(err, "Errore aggiornamento alert"));
     }
   }
 
@@ -282,7 +310,7 @@ export default function AdminPage() {
         "success",
         `Monitoraggio completato. ${data.newAlerts} nuovi album trovati.`
       );
-      await fetchAlbumAlerts();
+      await fetchAlertData();
     } catch (err) {
       showMessage("error", err instanceof Error ? err.message : "Errore monitoraggio");
     } finally {
@@ -384,8 +412,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (tab === "alerts") {
-      void fetchWatchedArtists();
-      void fetchAlbumAlerts();
+      void fetchAlertData();
     }
   }, [tab]);
 
