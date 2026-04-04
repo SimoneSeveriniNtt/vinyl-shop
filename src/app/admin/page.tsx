@@ -133,6 +133,8 @@ export default function AdminPage() {
   const [alertsNotice, setAlertsNotice] = useState("");
   const [monitoringInProgress, setMonitoringInProgress] = useState(false);
   const [monitoringStatusText, setMonitoringStatusText] = useState("");
+  const [monitoringProcessedCount, setMonitoringProcessedCount] = useState(0);
+  const [monitoringTotalCount, setMonitoringTotalCount] = useState(0);
   const [alertsViewTab, setAlertsViewTab] = useState<"configured" | "received">("configured");
   const [watchedArtistsSearch, setWatchedArtistsSearch] = useState("");
   const [watchedArtistsPage, setWatchedArtistsPage] = useState(1);
@@ -371,13 +373,15 @@ export default function AdminPage() {
 
       const isRunning = Boolean(payload.monitoring?.isRunning);
       setMonitoringInProgress(isRunning);
+      const processed = payload.monitoring?.processedCount ?? 0;
+      const total = payload.monitoring?.totalCount ?? payload.monitoring?.monitoredCount ?? 0;
+      setMonitoringProcessedCount(processed);
+      setMonitoringTotalCount(total);
 
       if (isRunning) {
         const startedAt = payload.monitoring?.startedAt
           ? new Date(payload.monitoring.startedAt).toLocaleString("it-IT")
           : "ora";
-        const processed = payload.monitoring?.processedCount ?? 0;
-        const total = payload.monitoring?.totalCount ?? payload.monitoring?.monitoredCount ?? 0;
         const etaSeconds = payload.monitoring?.etaSeconds ?? null;
         const etaLabel = etaSeconds && etaSeconds > 0
           ? ` • ETA ~${Math.ceil(etaSeconds / 60)} min`
@@ -1927,6 +1931,27 @@ export default function AdminPage() {
               </div>
               {monitoringStatusText && (
                 <p className="text-xs text-zinc-500 mb-4">{monitoringStatusText}</p>
+              )}
+              {monitoringTotalCount > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-1.5">
+                    <span>Progresso monitoraggio</span>
+                    <span>
+                      {Math.min(100, Math.round((monitoringProcessedCount / monitoringTotalCount) * 100))}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-zinc-200 overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, Math.round((monitoringProcessedCount / monitoringTotalCount) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    {monitoringProcessedCount}/{monitoringTotalCount} artisti elaborati
+                  </p>
+                </div>
               )}
               <p className="text-sm text-zinc-500 mb-4">
                 Aggiungi artisti italiani per ricevere notifiche quando escono nuovi album in preorder
