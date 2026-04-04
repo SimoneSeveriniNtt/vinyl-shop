@@ -80,6 +80,10 @@ function getBaseUrl(environment: EbayEnvironment): string {
 function toEbayCondition(condition: string): string {
   const normalized = condition.toLowerCase();
 
+  if (normalized.includes("sealed") || normalized.includes("sigillat")) {
+    return "NEW";
+  }
+
   if (normalized.includes("mint") || normalized.includes("near mint")) {
     return "NEW";
   }

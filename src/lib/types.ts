@@ -42,9 +42,10 @@ export interface Order {
   created_at: string;
 }
 
-export const CONDITIONS = ["Mint", "Near Mint", "Very Good", "Good", "Fair", "Poor"] as const;
+export const CONDITIONS = ["Sealed", "Mint", "Near Mint", "Very Good", "Good", "Fair", "Poor"] as const;
 
 export const CONDITION_LABELS: Record<string, string> = {
+  "Sealed":    "Sigillato",
   "Mint":      "Perfetto",
   "Near Mint": "Quasi Perfetto",
   "Very Good": "Molto Buono",

@@ -17,6 +17,7 @@ export default function VinylCard({ vinyl }: VinylCardProps) {
   const isInCart = items.some((item) => item.vinyl.id === vinyl.id);
 
   const conditionColor: Record<string, string> = {
+    Sealed: "bg-emerald-600",
     Mint: "bg-green-500",
     "Near Mint": "bg-green-400",
     "Very Good": "bg-blue-500",
