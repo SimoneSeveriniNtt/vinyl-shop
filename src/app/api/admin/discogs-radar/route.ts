@@ -46,6 +46,23 @@ function buildRankingNarrative(items: DiscogsRadarItem[], album: string) {
   };
 }
 
+function hasPremiumRaritySignal(item: DiscogsRadarItem): boolean {
+  const premium = new Set(["limited", "signed", "alt_cover", "numbered", "colored", "picture_disc"]);
+  return item.rarity_signals.some((s) => premium.has(s.type));
+}
+
+function rankForPreorderVisibility(a: DiscogsRadarItem, b: DiscogsRadarItem): number {
+  const aPre = a.preorder?.isPreorder ? 1 : 0;
+  const bPre = b.preorder?.isPreorder ? 1 : 0;
+  if (aPre !== bPre) return bPre - aPre;
+
+  const aPremium = hasPremiumRaritySignal(a) ? 1 : 0;
+  const bPremium = hasPremiumRaritySignal(b) ? 1 : 0;
+  if (aPremium !== bPremium) return bPremium - aPremium;
+
+  return b.rarity_score - a.rarity_score;
+}
+
 function getBearerToken(authHeader: string | null): string | null {
   if (!authHeader) return null;
   const [type, token] = authHeader.split(" ");
@@ -87,6 +104,7 @@ export async function GET(req: NextRequest) {
     const album = (req.nextUrl.searchParams.get("album") || "").trim();
     const genre = (req.nextUrl.searchParams.get("genre") || "").trim();
     const includePreorders = req.nextUrl.searchParams.get("includePreorders") !== "0";
+    const preorderOnly = req.nextUrl.searchParams.get("preorderOnly") === "1";
     const minRarity = Math.max(0, Math.min(100, Number.parseInt(req.nextUrl.searchParams.get("minRarity") || "0", 10) || 0));
     const page = Math.max(1, Number.parseInt(req.nextUrl.searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(40, Math.max(5, Number.parseInt(req.nextUrl.searchParams.get("limit") || "20", 10) || 20));
@@ -101,22 +119,6 @@ export async function GET(req: NextRequest) {
     // Fetch a single Discogs page to avoid burst calls that trigger rate limiting.
     const searchPage = await searchDiscogsReleases(artist, album || undefined, page, limit);
     const releases = searchPage.results;
-
-    if (releases.length === 0) {
-      return NextResponse.json({
-        success: true,
-        artist,
-        album: album || null,
-        minRarity,
-        page,
-        limit,
-        total: 0,
-        hasMore: false,
-        items: [],
-        generatedAt: new Date().toISOString(),
-        note: "Nessun vinile trovato per questo artista",
-      });
-    }
 
     // Fetch full details for each release and build radar items
     const radarItems: DiscogsRadarItem[] = [];
@@ -152,7 +154,12 @@ export async function GET(req: NextRequest) {
       ? await searchWebPreorderIntel({ artist, album: album || undefined, genre: genre || undefined, limit: 8 })
       : [];
 
-    const merged = [...radarItems, ...preorderItems].sort((a, b) => b.rarity_score - a.rarity_score);
+    const baseMerged = [...radarItems, ...preorderItems];
+    const merged = preorderOnly
+      ? baseMerged.filter((item) => item.preorder?.isPreorder)
+      : baseMerged;
+
+    merged.sort(preorderOnly ? rankForPreorderVisibility : (a, b) => b.rarity_score - a.rarity_score);
     const deduped: DiscogsRadarItem[] = [];
     const seen = new Set<string>();
 
@@ -172,6 +179,7 @@ export async function GET(req: NextRequest) {
       album: album || null,
       genre: genre || null,
       includePreorders,
+      preorderOnly,
       minRarity,
       page,
       limit,

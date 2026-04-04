@@ -80,6 +80,7 @@ export default function AdminPage() {
   const [radarAlbumInput, setRadarAlbumInput] = useState("");
   const [radarGenreInput, setRadarGenreInput] = useState("");
   const [radarIncludePreorders, setRadarIncludePreorders] = useState(true);
+  const [radarPreorderOnly, setRadarPreorderOnly] = useState(false);
   const [radarMinRarity, setRadarMinRarity] = useState(0);
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarLoadingMore, setRadarLoadingMore] = useState(false);
@@ -149,6 +150,7 @@ export default function AdminPage() {
         params.set("genre", radarGenreInput.trim());
       }
       params.set("includePreorders", radarIncludePreorders ? "1" : "0");
+      params.set("preorderOnly", radarPreorderOnly ? "1" : "0");
       if (radarMinRarity > 0) {
         params.set("minRarity", String(radarMinRarity));
       }
@@ -184,7 +186,7 @@ export default function AdminPage() {
       setRadarLoading(false);
       setRadarLoadingMore(false);
     }
-  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarMinRarity]);
+  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarPreorderOnly, radarMinRarity]);
 
   useEffect(() => {
     if (!user) return;
@@ -211,7 +213,7 @@ export default function AdminPage() {
     setRadarHasMore(false);
     setRadarTotal(0);
     setRadarNarrative(null);
-  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarMinRarity]);
+  }, [radarArtistFilter, radarAlbumInput, radarGenreInput, radarIncludePreorders, radarPreorderOnly, radarMinRarity]);
 
   function applyRadarSearch() {
     setRadarArtistFilter(radarArtistInput.trim());
@@ -1162,6 +1164,15 @@ export default function AdminPage() {
                       />
                       Includi pre-order da web (store/news)
                     </label>
+                    <label className="flex items-center gap-2 text-sm text-zinc-700">
+                      <input
+                        type="checkbox"
+                        checked={radarPreorderOnly}
+                        onChange={(e) => setRadarPreorderOnly(e.target.checked)}
+                        className="w-4 h-4 rounded border-zinc-300 text-amber-500 focus:ring-amber-400"
+                      />
+                      Mostra solo pre-order rari
+                    </label>
                     <div>
                       <label className="text-sm font-medium text-zinc-700 block mb-2">
                         Rarità minima: {radarMinRarity > 0 ? radarMinRarity : "Qualsiasi"}
@@ -1233,6 +1244,7 @@ export default function AdminPage() {
                   {radarAlbumInput ? ` • album: ${radarAlbumInput}` : ""}
                   {radarGenreInput ? ` • genere: ${radarGenreInput}` : ""}
                   {radarIncludePreorders ? " • preorder intel: ON" : " • preorder intel: OFF"}
+                  {radarPreorderOnly ? " • solo pre-order rari" : ""}
                   {radarMinRarity > 0 ? ` • rarità >= ${radarMinRarity}` : ""}
                 </p>
                 {radarItems.map((item) => (
