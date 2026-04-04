@@ -6,6 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 );
 
+function isMissingTableError(code?: string | null) {
+  return code === "PGRST205" || code === "42P01";
+}
+
 async function isAdminAuthenticated(req: NextRequest): Promise<boolean> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -42,6 +46,28 @@ export async function GET(req: NextRequest) {
           .order("discovered_at", { ascending: false })
           .limit(50),
       ]);
+
+    if (watchedError && isMissingTableError(watchedError.code)) {
+      return NextResponse.json({
+        success: true,
+        watchedArtists: [],
+        albumAlerts: [],
+        setupRequired: true,
+        warning: "Tabelle alert non trovate nel database. Esegui il bootstrap SQL per watched_artists e album_alerts.",
+        code: watchedError.code || null,
+      });
+    }
+
+    if (alertsError && isMissingTableError(alertsError.code)) {
+      return NextResponse.json({
+        success: true,
+        watchedArtists: watchedArtists || [],
+        albumAlerts: [],
+        setupRequired: true,
+        warning: "Tabella album_alerts non trovata nel database. Esegui il bootstrap SQL.",
+        code: alertsError.code || null,
+      });
+    }
 
     if (watchedError) {
       return NextResponse.json(

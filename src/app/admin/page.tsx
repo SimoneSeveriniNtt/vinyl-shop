@@ -141,6 +141,10 @@ export default function AdminPage() {
     const msg = parseUnknownError(err) || fallback;
     const lower = msg.toLowerCase();
 
+    if (lower.includes("pgrst205") || lower.includes("42p01")) {
+      return "Tabelle alert non trovate nel database. Esegui il bootstrap SQL per watched_artists e album_alerts.";
+    }
+
     if (lower.includes("could not find the table") || lower.includes("schema cache")) {
       return "Tabelle alert non trovate nel database. Esegui il bootstrap SQL per watched_artists e album_alerts.";
     }
@@ -199,6 +203,9 @@ export default function AdminPage() {
 
       setWatchedArtists(payload.watchedArtists || []);
       setAlbumAlerts(payload.albumAlerts || []);
+      if (payload.setupRequired && payload.warning) {
+        setAlertsError(String(payload.warning));
+      }
     } catch (err) {
       setAlertsError(toAlertErrorMessage(err, "Errore caricamento alert"));
     } finally {
@@ -1650,6 +1657,11 @@ export default function AdminPage() {
         {/* ===== TAB: ALERT ALBUM ===== */}
         {tab === "alerts" && (
           <div className="space-y-6">
+            <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3">
+              <p className="text-sm font-semibold text-zinc-800">Sezione 1: Alert Impostati</p>
+              <p className="text-xs text-zinc-600 mt-1">Configura gli artisti da monitorare e avvia la scansione.</p>
+            </div>
+
             {/* Add Artist Section */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <div className="flex items-center justify-between mb-4">
@@ -1755,6 +1767,11 @@ export default function AdminPage() {
             </div>
 
             {/* Album Alerts Notification */}
+            <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3">
+              <p className="text-sm font-semibold text-zinc-800">Sezione 2: Alert Ricevuti</p>
+              <p className="text-xs text-zinc-600 mt-1">Qui trovi gli album rilevati dal monitoraggio automatico o manuale.</p>
+            </div>
+
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <h3 className="text-base font-semibold text-zinc-900 mb-4 flex items-center gap-2">
                 <Bell className="w-4 h-4 text-red-500" />
