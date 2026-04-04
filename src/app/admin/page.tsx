@@ -52,23 +52,6 @@ interface OrderRow {
   order_items: { quantity: number; price_at_purchase: number; vinyls: { title: string; artist: string } | null }[];
 }
 
-interface MarketRadarItem {
-  id: string;
-  title: string;
-  artist: string;
-  source: "MusicBrainz" | "Market Intel";
-  editionType?: string;
-  releaseDate: string | null;
-  releaseStatus: "Pre-order" | "In uscita" | "Uscito" | "Data incerta";
-  daysToRelease: number | null;
-  country: string;
-  raritySignals: string[];
-  rarityConfidence: "Alta" | "Media" | "Bassa";
-  rarityChecklist: string[];
-  opportunityScore: number;
-  recommendation: "Alta" | "Media" | "Bassa";
-}
-
 const ORDER_STATUS_LABELS: Record<string, string> = {
   pending:   "In attesa",
   confirmed: "Confermato",
