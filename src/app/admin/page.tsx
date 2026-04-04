@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Genre, Vinyl, CONDITIONS, CONDITION_LABELS } from "@/lib/types";
-import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import AdminLogin from "@/components/AdminLogin";
 import ImageUpload from "@/components/ImageUpload";
@@ -97,6 +97,7 @@ export default function AdminPage() {
   const [radarQueryFilter, setRadarQueryFilter] = useState("");
   const [radarMinScore, setRadarMinScore] = useState(0);
   const [radarUpcomingOnly, setRadarUpcomingOnly] = useState(false);
+  const [radarShowAdvancedFilters, setRadarShowAdvancedFilters] = useState(false);
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarLoadingMore, setRadarLoadingMore] = useState(false);
   const [radarError, setRadarError] = useState("");
@@ -1092,8 +1093,9 @@ export default function AdminPage() {
 
         {tab === "radar" && (
           <>
-            <div className="bg-white rounded-2xl shadow-sm p-5 mb-5">
-              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="sticky top-3 z-20 bg-zinc-50/95 backdrop-blur supports-[backdrop-filter]:bg-zinc-50/80 rounded-2xl mb-5">
+              <div className="bg-white rounded-2xl shadow-sm p-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-amber-500" />
@@ -1103,6 +1105,17 @@ export default function AdminPage() {
                     Classifica automatica nuove uscite e possibili rarita per aiutarti negli acquisti di rivendita.
                   </p>
                 </div>
+                <div className="flex items-center gap-2 self-start md:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setRadarShowAdvancedFilters((prev) => !prev)}
+                    className="inline-flex items-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-3 py-2 rounded-xl text-sm font-semibold transition-colors"
+                  >
+                    <SlidersHorizontal className="w-4 h-4" />
+                    Filtri avanzati
+                  </button>
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-stretch">
                   <select
                     value={radarGenre}
@@ -1131,7 +1144,7 @@ export default function AdminPage() {
                   />
                   <button
                     onClick={applyRadarArtistFilter}
-                    className="lg:col-span-1 w-full inline-flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                    className={`${radarShowAdvancedFilters ? "" : "hidden"} md:inline-flex lg:col-span-1 w-full items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors`}
                   >
                     Cerca artista
                   </button>
@@ -1146,18 +1159,18 @@ export default function AdminPage() {
                       }
                     }}
                     placeholder="Cerca titolo/keyword (es. hellvisback, pre order)"
-                    className="lg:col-span-3 w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    className={`${radarShowAdvancedFilters ? "" : "hidden"} md:block lg:col-span-3 w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none`}
                   />
                   <button
                     onClick={applyRadarTextFilter}
-                    className="lg:col-span-1 w-full inline-flex items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                    className={`${radarShowAdvancedFilters ? "" : "hidden"} md:inline-flex lg:col-span-1 w-full items-center justify-center gap-2 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors`}
                   >
                     Cerca keyword
                   </button>
                   <select
                     value={radarMinScore}
                     onChange={(e) => setRadarMinScore(Number(e.target.value))}
-                    className="lg:col-span-2 w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                    className={`${radarShowAdvancedFilters ? "" : "hidden"} md:block lg:col-span-2 w-full px-4 py-2.5 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none`}
                   >
                     <option value={0}>Score minimo: nessuno</option>
                     <option value={50}>Score minimo: 50+</option>
@@ -1165,7 +1178,7 @@ export default function AdminPage() {
                     <option value={75}>Score minimo: 75+</option>
                     <option value={85}>Score minimo: 85+</option>
                   </select>
-                  <label className="lg:col-span-2 inline-flex items-center gap-2 text-sm text-zinc-700 px-3 py-2.5 border border-zinc-200 rounded-xl bg-white w-full">
+                  <label className={`${radarShowAdvancedFilters ? "" : "hidden"} md:inline-flex lg:col-span-2 items-center gap-2 text-sm text-zinc-700 px-3 py-2.5 border border-zinc-200 rounded-xl bg-white w-full`}>
                     <input
                       type="checkbox"
                       checked={radarUpcomingOnly}
@@ -1184,6 +1197,7 @@ export default function AdminPage() {
                   </button>
                 </div>
               </div>
+            </div>
             </div>
 
             {radarError && (
