@@ -70,6 +70,8 @@ const ORDER_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-100 text-red-700",
 };
 
+const WATCHED_ARTISTS_PAGE_SIZE = 20;
+
 export default function AdminPage() {
   const { user, loading: authLoading, signOut } = useAuth();
   const [tab, setTab] = useState<"vinyls" | "sold" | "orders" | "radar" | "alerts">("vinyls");
@@ -110,6 +112,8 @@ export default function AdminPage() {
   const [alertsNotice, setAlertsNotice] = useState("");
   const [monitoringInProgress, setMonitoringInProgress] = useState(false);
   const [alertsViewTab, setAlertsViewTab] = useState<"configured" | "received">("configured");
+  const [watchedArtistsSearch, setWatchedArtistsSearch] = useState("");
+  const [watchedArtistsPage, setWatchedArtistsPage] = useState(1);
 
   function parseUnknownError(err: unknown): string {
     if (err instanceof Error) return err.message;
@@ -426,6 +430,34 @@ export default function AdminPage() {
     }
   }, [tab]);
 
+  const filteredWatchedArtists = watchedArtists.filter((artist) => {
+    const normalizedSearch = watchedArtistsSearch.trim().toLowerCase();
+    if (!normalizedSearch) return true;
+
+    return String(artist.artist_name || "").toLowerCase().includes(normalizedSearch);
+  });
+
+  const watchedArtistsTotalPages = Math.max(
+    1,
+    Math.ceil(filteredWatchedArtists.length / WATCHED_ARTISTS_PAGE_SIZE)
+  );
+  const watchedArtistsCurrentPage = Math.min(watchedArtistsPage, watchedArtistsTotalPages);
+  const watchedArtistsStartIndex = (watchedArtistsCurrentPage - 1) * WATCHED_ARTISTS_PAGE_SIZE;
+  const paginatedWatchedArtists = filteredWatchedArtists.slice(
+    watchedArtistsStartIndex,
+    watchedArtistsStartIndex + WATCHED_ARTISTS_PAGE_SIZE
+  );
+  const watchedArtistsPageNumbers = Array.from(
+    { length: watchedArtistsTotalPages },
+    (_, index) => index + 1
+  ).filter((pageNumber) => Math.abs(pageNumber - watchedArtistsCurrentPage) <= 2);
+
+  useEffect(() => {
+    if (watchedArtistsPage > watchedArtistsTotalPages) {
+      setWatchedArtistsPage(watchedArtistsTotalPages);
+    }
+  }, [watchedArtistsPage, watchedArtistsTotalPages]);
+
   function applyRadarSearch() {
     setRadarArtistFilter(radarArtistInput.trim());
     setRadarAutoFetched(false);
@@ -567,12 +599,12 @@ export default function AdminPage() {
         setSaving(false);
         return;
       }
-      // Update images: delete old, insert new
-      await supabase.from("vinyl_images").delete().eq("vinyl_id", editingId);
-      if (extraImages.length > 0) {
-        await supabase.from("vinyl_images").insert(
-          extraImages.map((url, i) => ({ vinyl_id: editingId, image_url: url, sort_order: i }))
-        );
+      try {
+        await syncVinylImages(editingId, extraImages);
+      } catch (imageError) {
+        showMessage("error", "Errore aggiornamento foto: " + parseUnknownError(imageError));
+        setSaving(false);
+        return;
       }
       showMessage("success", "Vinile aggiornato!");
     } else {
@@ -591,10 +623,12 @@ export default function AdminPage() {
         setSaving(false);
         return;
       }
-      if (extraImages.length > 0) {
-        await supabase.from("vinyl_images").insert(
-          extraImages.map((url, i) => ({ vinyl_id: data.id, image_url: url, sort_order: i }))
-        );
+      try {
+        await syncVinylImages(data.id, extraImages);
+      } catch (imageError) {
+        showMessage("error", "Errore salvataggio foto: " + parseUnknownError(imageError));
+        setSaving(false);
+        return;
       }
 
       let publishMessage = "Vinile aggiunto al catalogo!";
@@ -667,6 +701,29 @@ export default function AdminPage() {
 
   function removeExtraImage(index: number) {
     setExtraImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function syncVinylImages(vinylId: string, images: string[]) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    if (!token) {
+      throw new Error("Sessione admin non valida");
+    }
+
+    const response = await fetch("/api/admin/vinyl-images/sync", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ vinylId, images }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.success) {
+      throw new Error(payload?.error || "Errore sincronizzazione immagini");
+    }
   }
 
   if (authLoading) {
@@ -1757,9 +1814,33 @@ export default function AdminPage() {
 
             {/* Watched Artists List */}
             {alertsViewTab === "configured" && <div className="bg-white rounded-2xl shadow-sm p-5">
-              <h3 className="text-base font-semibold text-zinc-900 mb-4">
-                Artisti Monitorati ({watchedArtists.length})
-              </h3>
+              <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-zinc-900">
+                    Artisti Monitorati ({watchedArtists.length})
+                  </h3>
+                  <p className="text-sm text-zinc-500 mt-1">
+                    {filteredWatchedArtists.length === watchedArtists.length
+                      ? `Totale artisti monitorati: ${watchedArtists.length}`
+                      : `Risultati filtro: ${filteredWatchedArtists.length} su ${watchedArtists.length}`}
+                  </p>
+                </div>
+                <div className="w-full sm:max-w-xs">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-1">
+                    Cerca artista
+                  </label>
+                  <input
+                    type="text"
+                    value={watchedArtistsSearch}
+                    onChange={(e) => {
+                      setWatchedArtistsSearch(e.target.value);
+                      setWatchedArtistsPage(1);
+                    }}
+                    placeholder="Filtra per nome artista"
+                    className="w-full px-4 py-3 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none text-sm"
+                  />
+                </div>
+              </div>
 
               {alertsLoading && watchedArtists.length === 0 ? (
                 <div className="flex items-center justify-center py-8">
@@ -1769,9 +1850,13 @@ export default function AdminPage() {
                 <p className="text-sm text-zinc-500 text-center py-6">
                   Nessun artista monitorato. Aggiungi il primo artista sopra!
                 </p>
+              ) : filteredWatchedArtists.length === 0 ? (
+                <p className="text-sm text-zinc-500 text-center py-6">
+                  Nessun artista trovato per la ricerca inserita.
+                </p>
               ) : (
                 <div className="space-y-2">
-                  {watchedArtists.map((artist) => (
+                  {paginatedWatchedArtists.map((artist) => (
                     <div
                       key={artist.id}
                       className="flex items-center justify-between p-3 bg-zinc-50 rounded-lg border border-zinc-100"
@@ -1791,6 +1876,54 @@ export default function AdminPage() {
                       </button>
                     </div>
                   ))}
+
+                  <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-zinc-500">
+                      Visualizzati {filteredWatchedArtists.length === 0 ? 0 : watchedArtistsStartIndex + 1}-
+                      {Math.min(
+                        watchedArtistsStartIndex + WATCHED_ARTISTS_PAGE_SIZE,
+                        filteredWatchedArtists.length
+                      )} di {filteredWatchedArtists.length}
+                    </p>
+
+                    {watchedArtistsTotalPages > 1 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => setWatchedArtistsPage((page) => Math.max(1, page - 1))}
+                          disabled={watchedArtistsCurrentPage === 1}
+                          className="px-3 py-2 rounded-lg border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Prec.
+                        </button>
+
+                        {watchedArtistsPageNumbers.map((pageNumber) => (
+                          <button
+                            key={pageNumber}
+                            onClick={() => setWatchedArtistsPage(pageNumber)}
+                            className={`min-w-10 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                              pageNumber === watchedArtistsCurrentPage
+                                ? "bg-zinc-900 text-white"
+                                : "border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                            }`}
+                          >
+                            {pageNumber}
+                          </button>
+                        ))}
+
+                        <button
+                          onClick={() =>
+                            setWatchedArtistsPage((page) =>
+                              Math.min(watchedArtistsTotalPages, page + 1)
+                            )
+                          }
+                          disabled={watchedArtistsCurrentPage === watchedArtistsTotalPages}
+                          className="px-3 py-2 rounded-lg border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Succ.
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>}
