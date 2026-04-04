@@ -9,6 +9,7 @@ const supabase = createClient(
 const MONITOR_STATE_ID = "album_monitor_manual";
 const MONITOR_STALE_MS = 20 * 60 * 1000;
 const SCAN_CONCURRENCY = 10;
+const MONITOR_BATCH_SIZE = 40;
 const FETCH_TIMEOUT_MS = 7000;
 
 type MonitorStateRow = {
@@ -20,6 +21,9 @@ type MonitorStateRow = {
   last_message: string | null;
   last_new_alerts: number | null;
   monitored_count: number | null;
+  total_count: number | null;
+  processed_count: number | null;
+  last_duration_ms: number | null;
   updated_at: string | null;
 };
 
@@ -75,7 +79,7 @@ function isFreshHeartbeat(heartbeatAt: string | null | undefined): boolean {
 async function getMonitorState(): Promise<MonitorStateRow | null> {
   const { data, error } = await supabase
     .from("monitoring_state")
-    .select("id, is_running, started_at, heartbeat_at, finished_at, last_message, last_new_alerts, monitored_count, updated_at")
+    .select("id, is_running, started_at, heartbeat_at, finished_at, last_message, last_new_alerts, monitored_count, total_count, processed_count, last_duration_ms, updated_at")
     .eq("id", MONITOR_STATE_ID)
     .maybeSingle();
 
@@ -85,6 +89,23 @@ async function getMonitorState(): Promise<MonitorStateRow | null> {
   }
 
   return (data as MonitorStateRow | null) || null;
+}
+
+function computeEtaSeconds(state: MonitorStateRow | null): number | null {
+  if (!state?.is_running || !state.started_at) return null;
+  const total = state.total_count ?? state.monitored_count ?? 0;
+  const processed = state.processed_count ?? 0;
+  if (total <= 0 || processed <= 0 || processed >= total) return null;
+
+  const startedMs = Date.parse(state.started_at);
+  if (Number.isNaN(startedMs)) return null;
+
+  const elapsedMs = Date.now() - startedMs;
+  if (elapsedMs <= 0) return null;
+
+  const msPerArtist = elapsedMs / processed;
+  const remaining = total - processed;
+  return Math.max(1, Math.round((msPerArtist * remaining) / 1000));
 }
 
 async function writeMonitorState(patch: Partial<MonitorStateRow>): Promise<void> {
@@ -213,6 +234,7 @@ async function isAdminAuthenticated(req: NextRequest): Promise<boolean> {
 
 export async function POST(req: NextRequest) {
   let runStarted = false;
+  const runStartedMs = Date.now();
   try {
     // Verifica autenticazione
     const isAuthenticated = await isAdminAuthenticated(req);
@@ -246,6 +268,9 @@ export async function POST(req: NextRequest) {
       heartbeat_at: nowIso(),
       finished_at: null,
       monitored_count: null,
+      total_count: null,
+      processed_count: 0,
+      last_duration_ms: null,
       last_message: "Monitoraggio in corso...",
     });
     runStarted = true;
@@ -267,6 +292,9 @@ export async function POST(req: NextRequest) {
         is_running: false,
         finished_at: nowIso(),
         monitored_count: 0,
+        total_count: 0,
+        processed_count: 0,
+        last_duration_ms: Date.now() - runStartedMs,
         last_new_alerts: 0,
         last_message: "Nessun artista da monitorare",
       });
@@ -278,25 +306,56 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Scansiona fonti in parallelo
-    const [feltrinelliResults, ibsResults] = await Promise.all([
-      scanFeltrinelli(artistNames),
-      scanIBS(artistNames),
-    ]);
+    let processedArtists = 0;
+    let feltrinelliCount = 0;
+    let ibsCount = 0;
+    const allResults: AlbumFound[] = [];
 
     await writeMonitorState({
-      heartbeat_at: nowIso(),
       monitored_count: artistNames.length,
-      last_message: `Scansione completata: ${artistNames.length} artisti`,
+      total_count: artistNames.length,
+      processed_count: 0,
+      last_message: `Scansione avviata: 0/${artistNames.length} artisti`,
+      heartbeat_at: nowIso(),
     });
 
-    const allResults = [...feltrinelliResults, ...ibsResults];
+    for (let i = 0; i < artistNames.length; i += MONITOR_BATCH_SIZE) {
+      const batch = artistNames.slice(i, i + MONITOR_BATCH_SIZE);
+      const [feltrinelliResults, ibsResults] = await Promise.all([
+        scanFeltrinelli(batch),
+        scanIBS(batch),
+      ]);
+
+      allResults.push(...feltrinelliResults, ...ibsResults);
+      feltrinelliCount += feltrinelliResults.length;
+      ibsCount += ibsResults.length;
+      processedArtists += batch.length;
+
+      const elapsedMs = Date.now() - runStartedMs;
+      const etaSeconds = processedArtists > 0
+        ? Math.max(0, Math.round(((elapsedMs / processedArtists) * (artistNames.length - processedArtists)) / 1000))
+        : null;
+
+      await writeMonitorState({
+        heartbeat_at: nowIso(),
+        monitored_count: artistNames.length,
+        total_count: artistNames.length,
+        processed_count: processedArtists,
+        last_message:
+          etaSeconds && etaSeconds > 0
+            ? `Scansione ${processedArtists}/${artistNames.length} artisti (ETA ~${Math.ceil(etaSeconds / 60)} min)`
+            : `Scansione ${processedArtists}/${artistNames.length} artisti`,
+      });
+    }
 
     if (allResults.length === 0) {
       await writeMonitorState({
         is_running: false,
         finished_at: nowIso(),
         monitored_count: artistNames.length,
+        total_count: artistNames.length,
+        processed_count: artistNames.length,
+        last_duration_ms: Date.now() - runStartedMs,
         last_new_alerts: 0,
         last_message: "Nessun nuovo album trovato",
       });
@@ -306,8 +365,8 @@ export async function POST(req: NextRequest) {
         newAlerts: 0,
         monitored: artistNames.length,
         sources: {
-          feltrinelli: feltrinelliResults.length,
-          ibs: ibsResults.length,
+          feltrinelli: feltrinelliCount,
+          ibs: ibsCount,
         },
         monitoring: { isRunning: false },
       });
@@ -399,6 +458,9 @@ export async function POST(req: NextRequest) {
       finished_at: nowIso(),
       heartbeat_at: nowIso(),
       monitored_count: artistNames.length,
+      total_count: artistNames.length,
+      processed_count: artistNames.length,
+      last_duration_ms: Date.now() - runStartedMs,
       last_new_alerts: insertedCount,
       last_message: `Monitoraggio completato: ${insertedCount} nuovi album`,
     });
@@ -410,8 +472,8 @@ export async function POST(req: NextRequest) {
       newAlerts: insertedCount,
       monitored: artistNames.length,
       sources: {
-        feltrinelli: feltrinelliResults.length,
-        ibs: ibsResults.length,
+        feltrinelli: feltrinelliCount,
+        ibs: ibsCount,
       },
       monitoring: {
         isRunning: false,
@@ -423,6 +485,7 @@ export async function POST(req: NextRequest) {
         is_running: false,
         finished_at: nowIso(),
         heartbeat_at: nowIso(),
+        last_duration_ms: Date.now() - runStartedMs,
         last_message: error instanceof Error ? `Errore monitoraggio: ${error.message}` : "Errore monitoraggio",
       });
       runStarted = false;
@@ -444,6 +507,7 @@ export async function POST(req: NextRequest) {
         is_running: false,
         finished_at: nowIso(),
         heartbeat_at: nowIso(),
+        last_duration_ms: Date.now() - runStartedMs,
       });
     }
   }
@@ -487,6 +551,10 @@ export async function GET(req: NextRequest) {
         lastMessage: monitoringState?.last_message || null,
         lastNewAlerts: monitoringState?.last_new_alerts ?? null,
         monitoredCount: monitoringState?.monitored_count ?? null,
+        totalCount: monitoringState?.total_count ?? null,
+        processedCount: monitoringState?.processed_count ?? null,
+        lastDurationMs: monitoringState?.last_duration_ms ?? null,
+        etaSeconds: computeEtaSeconds(monitoringState),
       },
     });
   } catch (error) {

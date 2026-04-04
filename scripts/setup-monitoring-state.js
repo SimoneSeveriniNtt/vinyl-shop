@@ -23,9 +23,16 @@ async function main() {
         last_message text null,
         last_new_alerts integer null,
         monitored_count integer null,
+        total_count integer null,
+        processed_count integer null,
+        last_duration_ms integer null,
         updated_at timestamptz not null default now()
       )
     `);
+
+    await client.query("alter table public.monitoring_state add column if not exists total_count integer null");
+    await client.query("alter table public.monitoring_state add column if not exists processed_count integer null");
+    await client.query("alter table public.monitoring_state add column if not exists last_duration_ms integer null");
 
     await client.query(`
       insert into public.monitoring_state (id, is_running, updated_at)

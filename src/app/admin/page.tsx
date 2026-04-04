@@ -42,6 +42,10 @@ interface MonitorStatusResponse {
     lastMessage?: string | null;
     lastNewAlerts?: number | null;
     monitoredCount?: number | null;
+    totalCount?: number | null;
+    processedCount?: number | null;
+    lastDurationMs?: number | null;
+    etaSeconds?: number | null;
   };
   error?: string;
 }
@@ -372,11 +376,22 @@ export default function AdminPage() {
         const startedAt = payload.monitoring?.startedAt
           ? new Date(payload.monitoring.startedAt).toLocaleString("it-IT")
           : "ora";
-        setMonitoringStatusText(`Monitoraggio in corso (avviato: ${startedAt})`);
+        const processed = payload.monitoring?.processedCount ?? 0;
+        const total = payload.monitoring?.totalCount ?? payload.monitoring?.monitoredCount ?? 0;
+        const etaSeconds = payload.monitoring?.etaSeconds ?? null;
+        const etaLabel = etaSeconds && etaSeconds > 0
+          ? ` • ETA ~${Math.ceil(etaSeconds / 60)} min`
+          : "";
+        const progressLabel = total > 0 ? ` • ${processed}/${total} artisti` : "";
+        setMonitoringStatusText(`Monitoraggio in corso (avviato: ${startedAt})${progressLabel}${etaLabel}`);
       } else if (payload.monitoring?.finishedAt) {
         const finishedAt = new Date(payload.monitoring.finishedAt).toLocaleString("it-IT");
         const newAlerts = payload.monitoring?.lastNewAlerts ?? 0;
-        setMonitoringStatusText(`Ultimo monitoraggio: ${finishedAt} (${newAlerts} nuovi alert)`);
+        const durationMs = payload.monitoring?.lastDurationMs ?? null;
+        const durationLabel = durationMs && durationMs > 0
+          ? ` • durata ${Math.max(1, Math.round(durationMs / 60000))} min`
+          : "";
+        setMonitoringStatusText(`Ultimo monitoraggio: ${finishedAt} (${newAlerts} nuovi alert)${durationLabel}`);
       } else {
         setMonitoringStatusText("");
       }
