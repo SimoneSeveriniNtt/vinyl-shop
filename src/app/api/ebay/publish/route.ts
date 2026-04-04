@@ -10,6 +10,7 @@ interface PublishPayload {
     description: string | null;
     price: number;
     condition: string;
+    is_sealed?: boolean;
     cover_url: string | null;
     available: boolean;
   };

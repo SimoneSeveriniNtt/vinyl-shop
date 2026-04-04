@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
+import { getConditionLabel } from "@/lib/types";
 import { Trash2, ArrowLeft, ShoppingBag, ArrowRight, AlertCircle, Clock } from "lucide-react";
 
 function formatTimeRemaining(seconds?: number): string {
@@ -92,7 +93,7 @@ export default function CartPage() {
                   <h3 className="font-bold text-zinc-900 hover:text-amber-600 transition-colors truncate">{vinyl.title}</h3>
                 </Link>
                 <p className="text-sm text-zinc-500">{vinyl.artist}</p>
-                <p className="text-sm text-zinc-400 mt-1">{vinyl.condition}</p>
+                <p className="text-sm text-zinc-400 mt-1">{getConditionLabel(vinyl.condition, vinyl.is_sealed)}</p>
 
                 <div className="flex items-center justify-between mt-4">
                   {/* Quantity — vinile unico, quantità fissa a 1 */}

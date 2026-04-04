@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ShoppingCart, Check } from "lucide-react";
-import { Vinyl, CONDITION_LABELS } from "@/lib/types";
+import { Vinyl, getConditionLabel, getConditionQuality, isConditionSealed } from "@/lib/types";
 import { useCart } from "@/context/CartContext";
 import CartToast from "@/components/CartToast";
 
@@ -15,9 +15,10 @@ export default function VinylCard({ vinyl }: VinylCardProps) {
   const { addToCart, items } = useCart();
   const [toastVisible, setToastVisible] = useState(false);
   const isInCart = items.some((item) => item.vinyl.id === vinyl.id);
+  const sealed = isConditionSealed(vinyl.condition, vinyl.is_sealed);
+  const quality = getConditionQuality(vinyl.condition);
 
   const conditionColor: Record<string, string> = {
-    Sealed: "bg-emerald-600",
     Mint: "bg-green-500",
     "Near Mint": "bg-green-400",
     "Very Good": "bg-blue-500",
@@ -52,8 +53,8 @@ export default function VinylCard({ vinyl }: VinylCardProps) {
           </div>
         )}
         {/* Condition badge */}
-        <span className={`absolute top-3 right-3 text-white text-xs font-semibold px-2 py-1 rounded-full ${conditionColor[vinyl.condition] || "bg-zinc-500"}`}>
-          {CONDITION_LABELS[vinyl.condition] || vinyl.condition}
+        <span className={`absolute top-3 right-3 text-white text-xs font-semibold px-2 py-1 rounded-full ${conditionColor[quality] || "bg-zinc-500"}`}>
+          {getConditionLabel(vinyl.condition, vinyl.is_sealed)}
         </span>
       </Link>
 
@@ -73,6 +74,11 @@ export default function VinylCard({ vinyl }: VinylCardProps) {
         {vinyl.is_signed && (
           <span className="inline-block mt-2 text-[11px] bg-amber-100 text-amber-800 px-2 py-1 rounded-full w-fit font-semibold">
             Autografato
+          </span>
+        )}
+        {sealed && (
+          <span className="inline-block mt-2 ml-2 text-[11px] bg-blue-100 text-blue-800 px-2 py-1 rounded-full w-fit font-semibold">
+            Sigillato
           </span>
         )}
 

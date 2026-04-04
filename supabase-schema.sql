@@ -17,6 +17,7 @@ CREATE TABLE vinyls (
   description TEXT,
   price NUMERIC(10, 2) NOT NULL DEFAULT 0,
   condition TEXT NOT NULL DEFAULT 'Good' CHECK (condition IN ('Mint', 'Near Mint', 'Very Good', 'Good', 'Fair', 'Poor')),
+  is_sealed BOOLEAN NOT NULL DEFAULT false,
   genre_id UUID REFERENCES genres(id) ON DELETE SET NULL,
   cover_url TEXT,
   is_signed BOOLEAN NOT NULL DEFAULT false,

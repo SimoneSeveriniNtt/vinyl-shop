@@ -27,6 +27,7 @@ interface PublishVinylInput {
   description: string | null;
   price: number;
   condition: string;
+  is_sealed?: boolean;
   cover_url: string | null;
   available: boolean;
 }
@@ -77,7 +78,11 @@ function getBaseUrl(environment: EbayEnvironment): string {
     : "https://api.sandbox.ebay.com";
 }
 
-function toEbayCondition(condition: string): string {
+function toEbayCondition(condition: string, isSealed?: boolean): string {
+  if (isSealed) {
+    return "NEW";
+  }
+
   const normalized = condition.toLowerCase();
 
   if (normalized.includes("sealed") || normalized.includes("sigillat")) {
@@ -164,7 +169,7 @@ export async function publishVinylToEbay(input: PublishVinylInput): Promise<Ebay
       "Content-Language": "it-IT",
     },
     body: JSON.stringify({
-      condition: toEbayCondition(input.condition),
+      condition: toEbayCondition(input.condition, input.is_sealed),
       locale: "it_IT",
       product: {
         title: sanitizeTitle(`${input.artist} - ${input.title}`),

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { Vinyl, CONDITION_LABELS } from "@/lib/types";
+import { Vinyl, getConditionLabel, getConditionQuality, isConditionSealed } from "@/lib/types";
 import { useCart } from "@/context/CartContext";
 import ImageGallery from "@/components/ImageGallery";
 import { ArrowLeft, ShoppingCart, Check, Loader2 } from "lucide-react";
@@ -41,6 +41,7 @@ export default function VinylDetailPage() {
   };
 
   const conditionColor: Record<string, string> = {
+    Sealed: "bg-blue-700",
     Mint: "bg-green-500",
     "Near Mint": "bg-green-400",
     "Very Good": "bg-blue-500",
@@ -72,6 +73,7 @@ export default function VinylDetailPage() {
     ...(vinyl.cover_url ? [vinyl.cover_url] : []),
     ...(vinyl.vinyl_images?.sort((a, b) => a.sort_order - b.sort_order).map((img) => img.image_url) || []),
   ];
+  const sealed = isConditionSealed(vinyl.condition, vinyl.is_sealed);
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -99,14 +101,19 @@ export default function VinylDetailPage() {
                   Autografato
                 </span>
               )}
+              {sealed && (
+                <span className="inline-block text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full mb-3 ml-2 font-semibold">
+                  Sigillato
+                </span>
+              )}
               <h1 className="text-3xl md:text-4xl font-bold text-zinc-900">{vinyl.title}</h1>
               <p className="text-xl text-zinc-500 mt-2">{vinyl.artist}</p>
             </div>
 
             <div className="flex items-center gap-4">
               <span className="text-3xl font-bold text-zinc-900">€{Number(vinyl.price).toFixed(2)}</span>
-              <span className={`text-white text-sm font-semibold px-3 py-1 rounded-full ${conditionColor[vinyl.condition] || "bg-zinc-500"}`}>
-                {CONDITION_LABELS[vinyl.condition] || vinyl.condition}
+              <span className={`text-white text-sm font-semibold px-3 py-1 rounded-full ${conditionColor[getConditionQuality(vinyl.condition)] || "bg-zinc-500"}`}>
+                {getConditionLabel(vinyl.condition, vinyl.is_sealed)}
               </span>
               {vinyl.release_year && (
                 <span className="text-sm text-zinc-500 bg-zinc-100 px-3 py-1 rounded-full">{vinyl.release_year}</span>

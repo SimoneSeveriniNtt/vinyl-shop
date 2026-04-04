@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Genre, Vinyl, CONDITIONS, CONDITION_LABELS } from "@/lib/types";
+import { Genre, Vinyl, CONDITIONS, getConditionLabel, getConditionQuality, isConditionSealed } from "@/lib/types";
 import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import AdminLogin from "@/components/AdminLogin";
@@ -18,6 +18,7 @@ interface VinylForm {
   cover_url: string;
   available: boolean;
   is_signed: boolean;
+  is_sealed: boolean;
   release_year: string;
 }
 
@@ -39,6 +40,7 @@ const emptyForm: VinylForm = {
   cover_url: "",
   available: true,
   is_signed: false,
+  is_sealed: false,
   release_year: "",
 };
 
@@ -283,11 +285,12 @@ export default function AdminPage() {
       artist: vinyl.artist,
       description: vinyl.description || "",
       price: String(vinyl.price),
-      condition: vinyl.condition,
+      condition: getConditionQuality(vinyl.condition),
       genre_id: vinyl.genre_id || "",
       cover_url: vinyl.cover_url || "",
       available: vinyl.available,
       is_signed: vinyl.is_signed || false,
+      is_sealed: isConditionSealed(vinyl.condition, vinyl.is_sealed),
       release_year: vinyl.release_year ? String(vinyl.release_year) : "",
     });
     setExtraImages(vinyl.vinyl_images?.sort((a, b) => a.sort_order - b.sort_order).map((i) => i.image_url) || []);
@@ -316,6 +319,7 @@ export default function AdminPage() {
       description: form.description.trim() || null,
       price: parseFloat(form.price),
       condition: form.condition,
+      is_sealed: form.is_sealed,
       genre_id: form.genre_id || null,
       cover_url: form.cover_url.trim() || null,
       available: form.available,
@@ -375,6 +379,7 @@ export default function AdminPage() {
                   description: data.description,
                   price: data.price,
                   condition: data.condition,
+                  is_sealed: form.is_sealed,
                   cover_url: data.cover_url,
                   available: data.available,
                 },
@@ -610,7 +615,7 @@ export default function AdminPage() {
                       className="w-full px-4 py-3 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none"
                     >
                       {CONDITIONS.map((c) => (
-                        <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
+                        <option key={c} value={c}>{getConditionLabel(c)}</option>
                       ))}
                     </select>
                   </div>
@@ -695,6 +700,15 @@ export default function AdminPage() {
                     className="w-4 h-4 text-amber-400 rounded"
                   />
                   <label htmlFor="is_signed" className="text-sm text-zinc-700">Vinile autografato</label>
+
+                  <input
+                    type="checkbox"
+                    id="is_sealed"
+                    checked={form.is_sealed}
+                    onChange={(e) => setForm({ ...form, is_sealed: e.target.checked })}
+                    className="w-4 h-4 text-amber-400 rounded"
+                  />
+                  <label htmlFor="is_sealed" className="text-sm text-zinc-700">Vinile sigillato</label>
                 </div>
 
                 <div className="flex gap-3 pt-4">
@@ -753,6 +767,11 @@ export default function AdminPage() {
                           AUTOGRAFATO
                         </span>
                       )}
+                      {isConditionSealed(vinyl.condition, vinyl.is_sealed) && (
+                        <span className="inline-flex mt-2 ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          SIGILLATO
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -763,7 +782,7 @@ export default function AdminPage() {
                     </div>
                     <div className="rounded-xl bg-zinc-50 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-zinc-400">Condizione</p>
-                      <p className="text-zinc-700 mt-1 truncate">{CONDITION_LABELS[vinyl.condition] || vinyl.condition}</p>
+                      <p className="text-zinc-700 mt-1 truncate">{getConditionLabel(vinyl.condition, vinyl.is_sealed)}</p>
                     </div>
                     <div className="rounded-xl bg-zinc-50 px-3 py-2 col-span-2">
                       <p className="text-[11px] uppercase tracking-wide text-zinc-400">Anno</p>
@@ -830,6 +849,11 @@ export default function AdminPage() {
                                 AUTOGRAFATO
                               </span>
                             )}
+                            {isConditionSealed(vinyl.condition, vinyl.is_sealed) && (
+                              <span className="inline-flex mt-1 ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                SIGILLATO
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -837,7 +861,7 @@ export default function AdminPage() {
                         <span className="text-sm text-zinc-600">{vinyl.genres?.name || "—"}</span>
                       </td>
                       <td className="px-6 py-4 hidden sm:table-cell">
-                        <span className="text-sm text-zinc-600">{CONDITION_LABELS[vinyl.condition] || vinyl.condition}</span>
+                        <span className="text-sm text-zinc-600">{getConditionLabel(vinyl.condition, vinyl.is_sealed)}</span>
                       </td>
                       <td className="px-6 py-4 hidden lg:table-cell">
                         <span className="text-sm text-zinc-500">{vinyl.release_year || "—"}</span>
@@ -913,6 +937,11 @@ export default function AdminPage() {
                           AUTOGRAFATO
                         </span>
                       )}
+                      {isConditionSealed(vinyl.condition, vinyl.is_sealed) && (
+                        <span className="inline-flex mt-2 ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          SIGILLATO
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -923,7 +952,7 @@ export default function AdminPage() {
                     </div>
                     <div className="rounded-xl bg-white px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-zinc-400">Condizione</p>
-                      <p className="text-zinc-600 mt-1 truncate">{CONDITION_LABELS[vinyl.condition] || vinyl.condition}</p>
+                      <p className="text-zinc-600 mt-1 truncate">{getConditionLabel(vinyl.condition, vinyl.is_sealed)}</p>
                     </div>
                     <div className="rounded-xl bg-white px-3 py-2 col-span-2">
                       <p className="text-[11px] uppercase tracking-wide text-zinc-400">Venduto il</p>
@@ -986,6 +1015,11 @@ export default function AdminPage() {
                                 AUTOGRAFATO
                               </span>
                             )}
+                            {isConditionSealed(vinyl.condition, vinyl.is_sealed) && (
+                              <span className="inline-flex mt-1 ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                SIGILLATO
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -993,7 +1027,7 @@ export default function AdminPage() {
                         <span className="text-sm text-zinc-500">{vinyl.genres?.name || "—"}</span>
                       </td>
                       <td className="px-6 py-4 hidden sm:table-cell">
-                        <span className="text-sm text-zinc-500">{CONDITION_LABELS[vinyl.condition] || vinyl.condition}</span>
+                        <span className="text-sm text-zinc-500">{getConditionLabel(vinyl.condition, vinyl.is_sealed)}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-medium text-zinc-500">€{Number(vinyl.price).toFixed(2)}</span>

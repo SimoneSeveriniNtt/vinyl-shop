@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Genre, Vinyl } from "@/lib/types";
+import { Genre, Vinyl, getConditionQuality } from "@/lib/types";
 import VinylCard from "@/components/VinylCard";
 import SearchBar from "@/components/SearchBar";
 import Filters from "@/components/Filters";
@@ -52,7 +52,7 @@ export default function CatalogPage() {
       v.title.toLowerCase().includes(search.toLowerCase()) ||
       v.artist.toLowerCase().includes(search.toLowerCase());
     const matchesGenre = !selectedGenre || v.genre_id === selectedGenre;
-    const matchesCondition = !selectedCondition || v.condition === selectedCondition;
+    const matchesCondition = !selectedCondition || getConditionQuality(v.condition) === selectedCondition;
     const matchesPrice = Number(v.price) >= priceRange[0] && Number(v.price) <= priceRange[1];
     return matchesSearch && matchesGenre && matchesCondition && matchesPrice;
   });
