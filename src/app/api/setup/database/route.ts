@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+function isMissingTableError(code?: string | null) {
+  return code === "PGRST205" || code === "42P01";
+}
+
 async function setupDatabase() {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,22 +22,31 @@ async function setupDatabase() {
       },
     });
 
-    // Funzione per eseguire query SQL via RPC o query builder
     const tables = [];
+    const diagnostics: Array<{ table: string; code: string | null; message: string }> = [];
 
-    // Tenta di creare watched_artists table
-    console.log("📋 Creazione tabella watched_artists...");
+    // Controllo watched_artists
+    console.log("📋 Controllo tabella watched_artists...");
     try {
-      // Verifica se tabella esiste selezionandola
       const { error: checkError } = await supabase
         .from("watched_artists")
         .select("*", { count: "exact", head: true });
 
-      if (checkError && checkError.code === "PGRST116") {
-        // Tabella non esiste, tenta di crearla tramite insert su una view o funzione
-        // Dato che non possiamo fare raw SQL, contiamo su creazione manuale
+      if (checkError && isMissingTableError(checkError.code)) {
         console.log("⚠️  Tabella watched_artists non esiste ancora");
         tables.push("watched_artists");
+        diagnostics.push({
+          table: "watched_artists",
+          code: checkError.code || null,
+          message: checkError.message,
+        });
+      } else if (checkError) {
+        diagnostics.push({
+          table: "watched_artists",
+          code: checkError.code || null,
+          message: checkError.message,
+        });
+        console.log("⚠️  Errore controllo watched_artists:", checkError.message);
       } else if (!checkError) {
         console.log("✅ Tabella watched_artists esiste");
       }
@@ -41,16 +54,28 @@ async function setupDatabase() {
       console.log("⚠️  Errore controllo watched_artists:", err);
     }
 
-    // Tenta di creare album_alerts table
-    console.log("📋 Creazione tabella album_alerts...");
+    // Controllo album_alerts
+    console.log("📋 Controllo tabella album_alerts...");
     try {
       const { error: checkError } = await supabase
         .from("album_alerts")
         .select("*", { count: "exact", head: true });
 
-      if (checkError && checkError.code === "PGRST116") {
+      if (checkError && isMissingTableError(checkError.code)) {
         console.log("⚠️  Tabella album_alerts non esiste ancora");
         tables.push("album_alerts");
+        diagnostics.push({
+          table: "album_alerts",
+          code: checkError.code || null,
+          message: checkError.message,
+        });
+      } else if (checkError) {
+        diagnostics.push({
+          table: "album_alerts",
+          code: checkError.code || null,
+          message: checkError.message,
+        });
+        console.log("⚠️  Errore controllo album_alerts:", checkError.message);
       } else if (!checkError) {
         console.log("✅ Tabella album_alerts esiste");
       }
@@ -65,6 +90,7 @@ async function setupDatabase() {
         tables.length === 0
           ? "Tutte le tabelle sono create!"
           : `Tabelle mancanti: ${tables.join(", ")}`,
+      diagnostics,
     };
   } catch (error) {
     return {

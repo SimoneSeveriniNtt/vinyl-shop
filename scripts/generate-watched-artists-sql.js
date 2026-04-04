@@ -13,6 +13,7 @@ const categoryArtists = {
     "Marracash", "Gu", "Salmo", "Lazza", "Geolier", "Sfera Ebbasta", "Fabri Fibra", "Emis Killa", "Gemitaiz", "MadMan",
     "Nitro", "Clementino", "Noyz Narcos", "Ernia", "Izi", "Tony Effe", "Shiva", "Baby Gang", "Tedua", "Ghali",
     "Massimo Pericolo", "Artie 5ive", "Nayt", "Dani Faiv", "Vegas Jones", "Rocco Hunt", "Giaime", "Bassi Maestro", "Frankie hi-nrg mc", "J Ax",
+    "Nerissima Serpe",
     "Kendrick Lamar", "Drake", "J Cole", "Eminem", "Jay Z", "Nas", "Travis Scott", "Future", "21 Savage", "Metro Boomin",
     "Lil Baby", "Gunna", "A Boogie Wit da Hoodie", "Lil Durk", "Roddy Ricch", "Tyler The Creator", "A$AP Rocky", "Pusha T", "Denzel Curry", "Freddie Gibbs",
   ],
