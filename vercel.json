@@ -1,0 +1,12 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "env": {},
+  "crons": [
+    {
+      "path": "/api/cron/monitor-albums",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

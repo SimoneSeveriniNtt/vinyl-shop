@@ -28,7 +28,19 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Setup scripts with secrets
+setup-album-alerts.js
+setup-album-alerts-v2.js
+copy-setup-sql.js
+setup-database-sql.sql
+setup-db.sh
+
+# Temporary files
+.tmp_*.html
+.dev-server.log
 .pnpm-debug.log*
+scripts/output/
 
 # env files (can opt-in for committing if needed)
 .env*

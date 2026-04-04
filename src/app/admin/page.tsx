@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Genre, Vinyl, CONDITIONS, formatCondition, getConditionLabel, getConditionQuality, isConditionSealed } from "@/lib/types";
-import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink, Bell, Check } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import AdminLogin from "@/components/AdminLogin";
 import ImageUpload from "@/components/ImageUpload";
@@ -72,7 +72,7 @@ const ORDER_STATUS_COLORS: Record<string, string> = {
 
 export default function AdminPage() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const [tab, setTab] = useState<"vinyls" | "sold" | "orders" | "radar">("vinyls");
+  const [tab, setTab] = useState<"vinyls" | "sold" | "orders" | "radar" | "alerts">("vinyls");
   const [vinyls, setVinyls] = useState<Vinyl[]>([]);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -100,6 +100,30 @@ export default function AdminPage() {
   const [extraImages, setExtraImages] = useState<string[]>([]);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Alert states
+  const [watchedArtists, setWatchedArtists] = useState<any[]>([]);
+  const [albumAlerts, setAlbumAlerts] = useState<any[]>([]);
+  const [newArtistInput, setNewArtistInput] = useState("");
+  const [newArtistGenre, setNewArtistGenre] = useState("Pop");
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsError, setAlertsError] = useState("");
+  const [monitoringInProgress, setMonitoringInProgress] = useState(false);
+
+  function toAlertErrorMessage(err: unknown, fallback: string): string {
+    const msg = err instanceof Error ? err.message : String(err || fallback);
+    const lower = msg.toLowerCase();
+
+    if (lower.includes("could not find the table") || lower.includes("schema cache")) {
+      return "Tabelle alert non trovate nel database. Esegui il bootstrap SQL per watched_artists e album_alerts.";
+    }
+
+    if (lower.includes("jwt") || lower.includes("not authorized") || lower.includes("non autorizzato")) {
+      return "Sessione admin non valida. Ricarica la pagina e accedi di nuovo.";
+    }
+
+    return msg || fallback;
+  }
+
   async function fetchData() {
     setLoading(true);
     const [vinylRes, genreRes] = await Promise.all([
@@ -117,6 +141,125 @@ export default function AdminPage() {
       .select("*, order_items(quantity, price_at_purchase, vinyls(title, artist))")
       .order("created_at", { ascending: false });
     if (data) setOrders(data as OrderRow[]);
+  }
+
+  async function fetchWatchedArtists() {
+    setAlertsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("watched_artists")
+        .select("*")
+        .eq("is_active", true)
+        .order("added_at", { ascending: false });
+      if (error) throw error;
+      setWatchedArtists(data || []);
+    } catch (err) {
+      setAlertsError(toAlertErrorMessage(err, "Errore caricamento artisti monitorati"));
+    } finally {
+      setAlertsLoading(false);
+    }
+  }
+
+  async function fetchAlbumAlerts() {
+    setAlertsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("album_alerts")
+        .select("*, watched_artists(artist_name)")
+        .order("discovered_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setAlbumAlerts(data || []);
+    } catch (err) {
+      setAlertsError(toAlertErrorMessage(err, "Errore caricamento alert"));
+    } finally {
+      setAlertsLoading(false);
+    }
+  }
+
+  async function addWatchedArtist() {
+    if (!newArtistInput.trim()) {
+      showMessage("error", "Inserisci il nome dell'artista");
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("watched_artists").insert({
+        artist_name: newArtistInput.trim(),
+        artist_name_lower: newArtistInput.trim().toLowerCase(),
+        genre: newArtistGenre || null,
+      });
+      if (error) throw error;
+      showMessage("success", `${newArtistInput} aggiunto ai monitorati`);
+      setNewArtistInput("");
+      setNewArtistGenre("Pop");
+      await fetchWatchedArtists();
+    } catch (err) {
+      showMessage("error", err instanceof Error ? err.message : "Errore aggiunta artista");
+    }
+  }
+
+  async function removeWatchedArtist(id: string) {
+    try {
+      const { error } = await supabase
+        .from("watched_artists")
+        .update({ is_active: false })
+        .eq("id", id);
+      if (error) throw error;
+      showMessage("success", "Artista rimosso da monitorati");
+      await fetchWatchedArtists();
+    } catch (err) {
+      showMessage("error", err instanceof Error ? err.message : "Errore rimozione artista");
+    }
+  }
+
+  async function updateAlertStatus(alertId: string, status: "viewed" | "purchased" | "dismissed") {
+    try {
+      const { error } = await supabase
+        .from("album_alerts")
+        .update({ status, notified_at: status === "viewed" ? new Date().toISOString() : undefined })
+        .eq("id", alertId);
+      if (error) throw error;
+      await fetchAlbumAlerts();
+    } catch (err) {
+      showMessage("error", err instanceof Error ? err.message : "Errore aggiornamento alert");
+    }
+  }
+
+  async function triggerMonitoring() {
+    setMonitoringInProgress(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      if (!token) {
+        throw new Error("Sessione non valida. Ricarica la pagina.");
+      }
+
+      const response = await fetch("/api/admin/album-monitor", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Errore monitoraggio");
+      }
+
+      showMessage(
+        "success",
+        `Monitoraggio completato. ${data.newAlerts} nuovi album trovati.`
+      );
+      await fetchAlbumAlerts();
+    } catch (err) {
+      showMessage("error", err instanceof Error ? err.message : "Errore monitoraggio");
+    } finally {
+      setMonitoringInProgress(false);
+    }
   }
 
   const fetchDiscogsRadar = useCallback(async (page = 1, append = false) => {
@@ -210,6 +353,13 @@ export default function AdminPage() {
 
     return () => clearTimeout(timer);
   }, [user]);
+
+  useEffect(() => {
+    if (tab === "alerts") {
+      void fetchWatchedArtists();
+      void fetchAlbumAlerts();
+    }
+  }, [tab]);
 
   function applyRadarSearch() {
     setRadarArtistFilter(radarArtistInput.trim());
@@ -556,6 +706,22 @@ export default function AdminPage() {
           >
             <Radar className="w-4 h-4" />
             Radar Acquisti
+          </button>
+          <button
+            onClick={() => setTab("alerts")}
+            className={`col-span-2 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-colors sm:col-span-1 ${
+              tab === "alerts" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+            }`}
+          >
+            <Bell className="w-4 h-4" />
+            Alert Album
+            {!alertsLoading && albumAlerts.filter((a) => a.status === "new").length > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                tab === "alerts" ? "bg-red-500/30 text-red-200" : "bg-red-100 text-red-700"
+              }`}>
+                {albumAlerts.filter((a) => a.status === "new").length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -1424,6 +1590,236 @@ export default function AdminPage() {
               </div>
             )}
           </>
+        )}
+
+        {/* ===== TAB: ALERT ALBUM ===== */}
+        {tab === "alerts" && (
+          <div className="space-y-6">
+            {/* Add Artist Section */}
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-amber-500" />
+                  Monitora Artisti
+                </h2>
+                <button
+                  onClick={() => void triggerMonitoring()}
+                  disabled={monitoringInProgress || watchedArtists.length === 0}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-300 text-white font-semibold rounded-xl text-sm transition-colors"
+                >
+                  {monitoringInProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
+                  Monitora Ora
+                </button>
+              </div>
+              <p className="text-sm text-zinc-500 mb-4">
+                Aggiungi artisti italiani per ricevere notifiche quando escono nuovi album in preorder
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={newArtistInput}
+                  onChange={(e) => setNewArtistInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void addWatchedArtist();
+                    }
+                  }}
+                  placeholder="Nome artista (es. Blanco, Madame, Geolier)"
+                  className="flex-1 px-4 py-3 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none text-sm"
+                />
+                <select
+                  value={newArtistGenre}
+                  onChange={(e) => setNewArtistGenre(e.target.value)}
+                  className="px-4 py-3 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none text-sm"
+                >
+                  <option value="Pop">Pop</option>
+                  <option value="Rap">Rap</option>
+                  <option value="Hip Hop">Hip Hop</option>
+                  <option value="Rock">Rock</option>
+                  <option value="Indie">Indie</option>
+                  <option value="Electronic">Electronic</option>
+                  <option value="Altro">Altro</option>
+                </select>
+                <button
+                  onClick={() => void addWatchedArtist()}
+                  disabled={!newArtistInput.trim() || alertsLoading}
+                  className="px-6 py-3 bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-300 text-zinc-900 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Aggiungi
+                </button>
+              </div>
+            </div>
+
+            {alertsError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                {alertsError}
+              </div>
+            )}
+
+            {/* Watched Artists List */}
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <h3 className="text-base font-semibold text-zinc-900 mb-4">
+                Artisti Monitorati ({watchedArtists.length})
+              </h3>
+
+              {alertsLoading && watchedArtists.length === 0 ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
+                </div>
+              ) : watchedArtists.length === 0 ? (
+                <p className="text-sm text-zinc-500 text-center py-6">
+                  Nessun artista monitorato. Aggiungi il primo artista sopra!
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {watchedArtists.map((artist) => (
+                    <div
+                      key={artist.id}
+                      className="flex items-center justify-between p-3 bg-zinc-50 rounded-lg border border-zinc-100"
+                    >
+                      <div>
+                        <p className="font-medium text-zinc-900">{artist.artist_name}</p>
+                        <p className="text-xs text-zinc-500">
+                          {artist.genre ? `${artist.genre} • ` : ""}
+                          {artist.last_check ? `Ultimo check: ${new Date(artist.last_check).toLocaleDateString("it-IT")}` : "Non sincronizzato"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => void removeWatchedArtist(artist.id)}
+                        className="p-2 text-zinc-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Album Alerts Notification */}
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <h3 className="text-base font-semibold text-zinc-900 mb-4 flex items-center gap-2">
+                <Bell className="w-4 h-4 text-red-500" />
+                Notifiche Album ({albumAlerts.length})
+              </h3>
+
+              {alertsLoading && albumAlerts.length === 0 ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
+                </div>
+              ) : albumAlerts.length === 0 ? (
+                <div className="text-center py-8">
+                  <Bell className="w-12 h-12 text-zinc-300 mx-auto mb-3" />
+                  <p className="text-sm text-zinc-500">Nessun nuovo album rilevato ancora</p>
+                  <p className="text-xs text-zinc-400 mt-1">I nuovi album appariranno qui automaticamente</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {albumAlerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className={`p-4 rounded-xl border-2 ${
+                        alert.status === "new"
+                          ? "bg-blue-50 border-blue-200"
+                          : alert.status === "viewed"
+                          ? "bg-zinc-50 border-zinc-200"
+                          : alert.status === "purchased"
+                          ? "bg-green-50 border-green-200"
+                          : "bg-zinc-100 border-zinc-300"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <p className="font-semibold text-zinc-900">
+                            {alert.artist_name} — {alert.album_title}
+                          </p>
+                          <p className="text-sm text-zinc-600 mt-1">
+                            {alert.release_date && `📅 ${alert.release_date}`}
+                            {alert.edition_details && (
+                              <>
+                                <br />
+                                <span className="text-xs text-zinc-500">{alert.edition_details}</span>
+                              </>
+                            )}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                              alert.source === "Feltrinelli"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : alert.source === "IBS"
+                                ? "bg-blue-100 text-blue-800"
+                                : alert.source === "Discogs"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-zinc-100 text-zinc-800"
+                            }`}>
+                              {alert.source}
+                            </span>
+                            {alert.price_eur && (
+                              <span className="text-sm font-medium text-zinc-700">€{Number(alert.price_eur).toFixed(2)}</span>
+                            )}
+                            {alert.status === "new" && (
+                              <span className="text-xs font-bold px-2 py-1 rounded-full bg-red-100 text-red-700">
+                                NUOVO
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {alert.retailer_url && (
+                          <a
+                            href={alert.retailer_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-2 bg-amber-400 hover:bg-amber-500 text-zinc-900 font-semibold rounded-lg text-sm flex items-center gap-1 transition-colors whitespace-nowrap"
+                          >
+                            Visualizza
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-current border-opacity-20">
+                        {alert.status === "new" && (
+                          <>
+                            <button
+                              onClick={() => void updateAlertStatus(alert.id, "viewed")}
+                              className="text-xs px-3 py-1.5 rounded-lg bg-white border border-current border-opacity-30 text-zinc-700 hover:bg-zinc-100 transition-colors"
+                            >
+                              Visto
+                            </button>
+                            <button
+                              onClick={() => void updateAlertStatus(alert.id, "purchased")}
+                              className="text-xs px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors flex items-center gap-1"
+                            >
+                              <Check className="w-3 h-3" />
+                              Acquistato
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() => void updateAlertStatus(alert.id, "dismissed")}
+                          className="text-xs px-3 py-1.5 rounded-lg text-zinc-500 hover:text-red-700 transition-colors"
+                        >
+                          Nascondi
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Info Alert */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+              <p className="text-sm text-amber-900">
+                <strong>💡 Come funziona:</strong> Aggiungi gli artisti che vuoi monitorare. Il sistema scansiona automaticamente Feltrinelli, IBS e Discogs ogni giorno a mezzanotte (UTC) per trovare nuovi album in preorder. Riceverai notifiche qui non appena viene rilevato un nuovo album.
+              </p>
+            </div>
+          </div>
         )}
 
       </div>
