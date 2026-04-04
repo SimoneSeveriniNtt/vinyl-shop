@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
-import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, ArrowRight, AlertCircle, Clock } from "lucide-react";
+import { Trash2, ArrowLeft, ShoppingBag, ArrowRight, AlertCircle, Clock } from "lucide-react";
 
 function formatTimeRemaining(seconds?: number): string {
   if (!seconds) return "";
@@ -95,21 +95,9 @@ export default function CartPage() {
                 <p className="text-sm text-zinc-400 mt-1">{vinyl.condition}</p>
 
                 <div className="flex items-center justify-between mt-4">
-                  {/* Quantity */}
+                  {/* Quantity — vinile unico, quantità fissa a 1 */}
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateQuantity(vinyl.id, quantity - 1)}
-                      className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <span className="w-8 text-center font-medium">{quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(vinyl.id, quantity + 1)}
-                      className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                    <span className="text-sm text-zinc-400 font-medium">Quantità: 1</span>
                   </div>
 
                   {/* Price + delete */}

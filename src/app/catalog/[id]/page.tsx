@@ -134,10 +134,18 @@ export default function VinylDetailPage() {
               ) : (
                 <button
                   onClick={handleAddToCart}
-                  disabled={!vinyl.available}
-                  className="flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-300 disabled:cursor-not-allowed text-zinc-900 font-semibold px-8 py-4 rounded-xl transition-colors text-lg"
+                  disabled={!vinyl.available || inCart}
+                  className={`flex items-center justify-center gap-2 font-semibold px-8 py-4 rounded-xl transition-colors text-lg ${
+                    inCart
+                      ? "bg-green-500 text-white cursor-default"
+                      : "bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-300 disabled:cursor-not-allowed text-zinc-900"
+                  }`}
                 >
-                  {added ? (
+                  {inCart ? (
+                    <>
+                      <Check className="w-5 h-5" /> Nel carrello
+                    </>
+                  ) : added ? (
                     <>
                       <Check className="w-5 h-5" /> Aggiunto!
                     </>

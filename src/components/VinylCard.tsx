@@ -1,16 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Check } from "lucide-react";
 import { Vinyl, CONDITION_LABELS } from "@/lib/types";
 import { useCart } from "@/context/CartContext";
+import CartToast from "@/components/CartToast";
 
 interface VinylCardProps {
   vinyl: Vinyl;
 }
 
 export default function VinylCard({ vinyl }: VinylCardProps) {
-  const { addToCart } = useCart();
+  const { addToCart, items } = useCart();
+  const [toastVisible, setToastVisible] = useState(false);
+  const isInCart = items.some((item) => item.vinyl.id === vinyl.id);
 
   const conditionColor: Record<string, string> = {
     Mint: "bg-green-500",
@@ -76,15 +80,33 @@ export default function VinylCard({ vinyl }: VinylCardProps) {
             €{Number(vinyl.price).toFixed(2)}
           </span>
           <button
-            onClick={() => addToCart(vinyl)}
-            disabled={!vinyl.available}
-            className="bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-200 disabled:cursor-not-allowed text-zinc-900 disabled:text-zinc-400 p-2 rounded-xl transition-colors"
-            title={vinyl.available ? "Aggiungi al carrello" : "Vinile venduto"}
+            onClick={() => {
+              if (!isInCart) {
+                addToCart(vinyl);
+                setToastVisible(true);
+              }
+            }}
+            disabled={!vinyl.available || isInCart}
+            className={`p-2 rounded-xl transition-all ${
+              isInCart
+                ? "bg-green-500 text-white cursor-default"
+                : "bg-amber-400 hover:bg-amber-500 disabled:bg-zinc-200 disabled:cursor-not-allowed text-zinc-900 disabled:text-zinc-400"
+            }`}
+            title={isInCart ? "Già nel carrello" : vinyl.available ? "Aggiungi al carrello" : "Vinile venduto"}
           >
-            <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
+            {isInCart ? (
+              <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+            ) : (
+              <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
+            )}
           </button>
         </div>
       </div>
+      <CartToast
+        message={`"${vinyl.title}" aggiunto al carrello`}
+        visible={toastVisible}
+        onHide={() => setToastVisible(false)}
+      />
     </div>
   );
 }

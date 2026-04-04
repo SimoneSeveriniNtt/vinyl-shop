@@ -44,8 +44,13 @@ export default function AdminLoginPage() {
             <input
               type="email"
               required
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              inputMode="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value.toLowerCase().trim())}
               className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-xl text-white placeholder-zinc-400 focus:ring-2 focus:ring-amber-400 focus:outline-none focus:border-transparent"
               placeholder="admin@email.com"
             />
@@ -56,6 +61,7 @@ export default function AdminLoginPage() {
             <input
               type="password"
               required
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 bg-zinc-700 border border-zinc-600 rounded-xl text-white placeholder-zinc-400 focus:ring-2 focus:ring-amber-400 focus:outline-none focus:border-transparent"
