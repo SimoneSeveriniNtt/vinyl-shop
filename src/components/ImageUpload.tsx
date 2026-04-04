@@ -32,23 +32,37 @@ export default function ImageUpload({ onImageUploaded, label = "Carica immagine"
 
     const ext = file.name.split(".").pop() || "jpg";
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-    const filePath = `uploads/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("vinyl-images")
-      .upload(filePath, file, { cacheControl: "3600", upsert: false });
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-    if (uploadError) {
-      setError("Errore upload: " + uploadError.message);
+    if (!session?.access_token) {
+      setError("Errore upload: sessione admin non valida");
       setUploading(false);
       return;
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from("vinyl-images")
-      .getPublicUrl(filePath);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("fileName", fileName);
 
-    onImageUploaded(publicUrl);
+    const response = await fetch("/api/admin/storage/upload", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: formData,
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.success || !payload?.publicUrl) {
+      setError("Errore upload: " + (payload?.error || "Upload non riuscito"));
+      setUploading(false);
+      return;
+    }
+
+    onImageUploaded(payload.publicUrl);
     setUploading(false);
   }, [onImageUploaded]);
 
