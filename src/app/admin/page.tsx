@@ -193,7 +193,7 @@ export default function AdminPage() {
     try {
       const { data, error } = await supabase
         .from("album_alerts")
-        .select("*, watched_artists(artist_name)")
+        .select("*")
         .order("discovered_at", { ascending: false })
         .limit(50);
       if (error) throw error;
