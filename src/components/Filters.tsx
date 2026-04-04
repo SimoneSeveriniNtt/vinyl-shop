@@ -54,54 +54,38 @@ export default function Filters({
 
         {/* Genre filter */}
         <div>
-          <h4 className="font-semibold text-zinc-800 mb-3">Genere</h4>
-          <div className="space-y-2">
-            <button
-              onClick={() => onGenreChange("")}
-              className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                !selectedGenre ? "bg-amber-400 text-zinc-900 font-medium" : "text-zinc-600 hover:bg-zinc-100"
-              }`}
-            >
-              Tutti
-            </button>
+          <label htmlFor="genre-filter" className="block font-semibold text-zinc-800 mb-3">Genere</label>
+          <select
+            id="genre-filter"
+            value={selectedGenre}
+            onChange={(e) => onGenreChange(e.target.value)}
+            className="w-full px-4 py-3 border border-zinc-200 rounded-xl text-sm text-zinc-700 bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+          >
+            <option value="">Tutti i generi</option>
             {genres.map((genre) => (
-              <button
-                key={genre.id}
-                onClick={() => onGenreChange(genre.id)}
-                className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                  selectedGenre === genre.id ? "bg-amber-400 text-zinc-900 font-medium" : "text-zinc-600 hover:bg-zinc-100"
-                }`}
-              >
+              <option key={genre.id} value={genre.id}>
                 {genre.name}
-              </button>
+              </option>
             ))}
-          </div>
+          </select>
         </div>
 
         {/* Condition filter */}
         <div>
-          <h4 className="font-semibold text-zinc-800 mb-3">Condizione</h4>
-          <div className="space-y-2">
-            <button
-              onClick={() => onConditionChange("")}
-              className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                !selectedCondition ? "bg-amber-400 text-zinc-900 font-medium" : "text-zinc-600 hover:bg-zinc-100"
-              }`}
-            >
-              Tutte
-            </button>
+          <label htmlFor="condition-filter" className="block font-semibold text-zinc-800 mb-3">Condizione</label>
+          <select
+            id="condition-filter"
+            value={selectedCondition}
+            onChange={(e) => onConditionChange(e.target.value)}
+            className="w-full px-4 py-3 border border-zinc-200 rounded-xl text-sm text-zinc-700 bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+          >
+            <option value="">Tutte le condizioni</option>
             {CONDITIONS.map((cond) => (
-              <button
-                key={cond}
-                onClick={() => onConditionChange(cond)}
-                className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                  selectedCondition === cond ? "bg-amber-400 text-zinc-900 font-medium" : "text-zinc-600 hover:bg-zinc-100"
-                }`}
-              >
+              <option key={cond} value={cond}>
                 {CONDITION_LABELS[cond]}
-              </button>
+              </option>
             ))}
-          </div>
+          </select>
         </div>
 
         {/* Price range */}
