@@ -156,7 +156,7 @@ async function fetchDiscogs(path: string, attempt = 0): Promise<any> {
 }
 
 export async function searchDiscogsReleases(
-  artist: string,
+  artist?: string,
   album?: string,
   page = 1,
   perPage = 20
@@ -171,10 +171,13 @@ export async function searchDiscogsReleases(
   const params = new URLSearchParams({
     type: "release",
     format: "Vinyl",
-    artist,
     page: String(page),
     per_page: String(perPage),
   });
+
+  if (artist?.trim()) {
+    params.set("artist", artist.trim());
+  }
 
   if (album?.trim()) {
     params.set("release_title", album.trim());
@@ -187,17 +190,23 @@ export async function searchDiscogsReleases(
   }
 
   // Fallback for artists that are poorly indexed in the strict artist field.
-  const query = album ? `${artist} ${album}` : artist;
+  const query = [artist?.trim() || "", album?.trim() || ""].filter(Boolean).join(" ");
+  if (!query) {
+    return primaryPage;
+  }
+
   const fallbackData = await fetchDiscogs(
     `/database/search?q=${encodeURIComponent(query)}&type=release&format=Vinyl&page=${page}&per_page=${perPage}`
   );
   const fallbackPage = toPage(fallbackData);
 
-  // Keep only releases that still resemble the artist name to avoid noisy matches.
-  const artistLower = artist.trim().toLowerCase();
-  const filtered = fallbackPage.results.filter((r: DiscogsRelease) =>
-    `${r.title} ${(r.artists || []).map((a: DiscogsArtist) => a.name).join(" ")}`.toLowerCase().includes(artistLower)
-  );
+  // Keep only releases that still resemble the artist name when artist is provided.
+  const artistLower = artist?.trim().toLowerCase() || "";
+  const filtered = artistLower
+    ? fallbackPage.results.filter((r: DiscogsRelease) =>
+        `${r.title} ${(r.artists || []).map((a: DiscogsArtist) => a.name).join(" ")}`.toLowerCase().includes(artistLower)
+      )
+    : fallbackPage.results;
 
   return {
     ...fallbackPage,

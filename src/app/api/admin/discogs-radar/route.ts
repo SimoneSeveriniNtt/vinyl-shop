@@ -109,16 +109,26 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, Number.parseInt(req.nextUrl.searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(40, Math.max(5, Number.parseInt(req.nextUrl.searchParams.get("limit") || "20", 10) || 20));
 
-    if (!artist) {
+    if (!artist && !album) {
       return NextResponse.json(
-        { success: false, error: "Parametro 'artist' richiesto" },
+        { success: false, error: "Inserisci almeno artista o album" },
         { status: 400 }
       );
     }
 
     // Fetch a single Discogs page to avoid burst calls that trigger rate limiting.
-    const searchPage = await searchDiscogsReleases(artist, album || undefined, page, limit);
-    const releases = searchPage.results;
+    let searchPage = await searchDiscogsReleases(artist || undefined, album || undefined, page, limit);
+    let releases = searchPage.results;
+    let fallbackMode: "none" | "album-only" = "none";
+
+    if (releases.length === 0 && artist && album) {
+      const albumOnlyPage = await searchDiscogsReleases(undefined, album, page, limit);
+      if (albumOnlyPage.results.length > 0) {
+        searchPage = albumOnlyPage;
+        releases = albumOnlyPage.results;
+        fallbackMode = "album-only";
+      }
+    }
 
     // Fetch full details for each release and build radar items
     const radarItems: DiscogsRadarItem[] = [];
@@ -151,7 +161,7 @@ export async function GET(req: NextRequest) {
     });
 
     const preorderItems = includePreorders
-      ? await searchWebPreorderIntel({ artist, album: album || undefined, genre: genre || undefined, limit: 8 })
+      ? await searchWebPreorderIntel({ artist: artist || undefined, album: album || undefined, genre: genre || undefined, limit: 8 })
       : [];
 
     const baseMerged = [...radarItems, ...preorderItems];
@@ -187,6 +197,7 @@ export async function GET(req: NextRequest) {
       hasMore,
       items: deduped,
       rankingNarrative: buildRankingNarrative(deduped, album),
+      fallbackMode,
       generatedAt: new Date().toISOString(),
       note: includePreorders
         ? "Dati Discogs + Web Preorder Intel per edizioni rare e pre-order"

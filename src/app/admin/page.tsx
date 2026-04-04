@@ -134,9 +134,10 @@ export default function AdminPage() {
       }
 
       const effectiveArtist = (radarArtistFilter.trim() || radarArtistInput.trim()).trim();
+      const effectiveAlbum = radarAlbumInput.trim();
 
-      if (!effectiveArtist) {
-        throw new Error("Inserisci il nome dell'artista");
+      if (!effectiveArtist && !effectiveAlbum) {
+        throw new Error("Inserisci almeno artista o album");
       }
 
       if (effectiveArtist !== radarArtistFilter) {
@@ -144,13 +145,16 @@ export default function AdminPage() {
       }
 
       const params = new URLSearchParams({
-        artist: effectiveArtist,
         page: String(page),
         limit: "20",
       });
 
-      if (radarAlbumInput.trim()) {
-        params.set("album", radarAlbumInput.trim());
+      if (effectiveArtist) {
+        params.set("artist", effectiveArtist);
+      }
+
+      if (effectiveAlbum) {
+        params.set("album", effectiveAlbum);
       }
       if (radarGenreInput.trim()) {
         params.set("genre", radarGenreInput.trim());
@@ -1215,7 +1219,7 @@ export default function AdminPage() {
                     </div>
                     <button
                       onClick={() => void fetchDiscogsRadar(1, false)}
-                      disabled={radarLoading || !radarArtistInput.trim()}
+                      disabled={radarLoading || (!radarArtistInput.trim() && !radarAlbumInput.trim())}
                       className="w-full inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-300 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                     >
                       {radarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}

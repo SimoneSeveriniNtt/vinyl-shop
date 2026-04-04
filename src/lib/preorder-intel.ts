@@ -142,11 +142,12 @@ function flattenFeltrinelliImpressions(raw: unknown): FeltrinelliProduct[] {
 }
 
 async function fetchStorePreorders(
-  input: { artist: string; album?: string; genre?: string },
+  input: { artist?: string; album?: string; genre?: string },
   storeBaseUrl: string,
   storeDefaultName: string
 ): Promise<DiscogsRadarItem[]> {
   const q = [input.artist, input.album, "vinile"].filter(Boolean).join(" ");
+  if (!q.trim()) return [];
   const url = `${storeBaseUrl}/search/?query=${encodeURIComponent(q)}`;
   const res = await fetch(url, {
     headers: {
@@ -183,7 +184,7 @@ async function fetchStorePreorders(
   }
 
   const products = flattenFeltrinelliImpressions(payload?.ecommerce?.impression);
-  const artistLower = input.artist.toLowerCase();
+  const artistLower = (input.artist || "").toLowerCase();
   const albumLower = (input.album || "").toLowerCase();
 
   const mapped: DiscogsRadarItem[] = [];
@@ -195,7 +196,7 @@ async function fetchStorePreorders(
 
     const isVinyl = VINYL_TERMS.test(text);
     const hasNonRecordNoise = NON_RECORD_TERMS.test(text);
-    const artistMatch = text.toLowerCase().includes(artistLower);
+    const artistMatch = artistLower ? text.toLowerCase().includes(artistLower) : true;
     const albumMatch = albumLower ? text.toLowerCase().includes(albumLower) : true;
     const isPreorder = /disponibile dal|prenot|preordin|uscita/i.test(delivery) || Boolean(p.bookability);
 
@@ -213,7 +214,7 @@ async function fetchStorePreorders(
 
     mapped.push({
       id: -(1000 + mapped.length + 1),
-      artist: input.artist,
+      artist: input.artist || author || "Sconosciuto",
       title,
       source: "Web Preorder Intel",
       releaseYear: p.year_edition ? Number.parseInt(String(p.year_edition), 10) || null : null,
@@ -250,17 +251,17 @@ async function fetchStorePreorders(
 }
 
 export async function searchWebPreorderIntel(input: {
-  artist: string;
+  artist?: string;
   album?: string;
   genre?: string;
   limit?: number;
 }): Promise<DiscogsRadarItem[]> {
-  const artist = input.artist.trim();
+  const artist = input.artist?.trim() || "";
   const album = input.album?.trim() || "";
   const genre = input.genre?.trim() || "";
   const limit = input.limit ?? 10;
 
-  if (!artist) return [];
+  if (!artist && !album) return [];
 
   const [feltrinelliItems, ibsItems] = await Promise.all([
     fetchStorePreorders({ artist, album, genre }, "https://www.lafeltrinelli.it", "Feltrinelli"),
@@ -287,7 +288,7 @@ export async function searchWebPreorderIntel(input: {
     seen.add(key);
 
     const text = `${r.title} ${r.description}`;
-    const artistMatch = text.toLowerCase().includes(artist.toLowerCase());
+    const artistMatch = artist ? text.toLowerCase().includes(artist.toLowerCase()) : true;
     const albumMatch = album ? text.toLowerCase().includes(album.toLowerCase()) : true;
     const vinylMatch = VINYL_TERMS.test(text);
     const preorderMatch = PREORDER_TERMS.test(text);
@@ -305,7 +306,7 @@ export async function searchWebPreorderIntel(input: {
 
     return {
       id: -(index + 1),
-      artist,
+      artist: artist || "Sconosciuto",
       title: result.title,
       source: "Web Preorder Intel" as const,
       releaseYear: null,
