@@ -56,6 +56,8 @@ interface MarketRadarItem {
   id: string;
   title: string;
   artist: string;
+  source: "MusicBrainz" | "Market Intel";
+  editionType?: string;
   releaseDate: string | null;
   releaseStatus: "Pre-order" | "In uscita" | "Uscito" | "Data incerta";
   daysToRelease: number | null;
@@ -1229,9 +1231,15 @@ export default function AdminPage() {
                       <div className="min-w-0">
                         <p className="text-base font-semibold text-zinc-900 truncate">{item.title}</p>
                         <p className="text-sm text-zinc-500 truncate">{item.artist}</p>
+                        {item.editionType && (
+                          <p className="text-xs text-zinc-600 mt-1 truncate">{item.editionType}</p>
+                        )}
                         <div className="flex flex-wrap gap-2 mt-2 text-xs text-zinc-500">
                           <span className="bg-zinc-100 px-2 py-1 rounded-full">Data: {item.releaseDate || "N/D"}</span>
                           <span className="bg-zinc-100 px-2 py-1 rounded-full">Paese: {item.country}</span>
+                          <span className={`px-2 py-1 rounded-full ${item.source === "Market Intel" ? "bg-blue-100 text-blue-700" : "bg-zinc-100 text-zinc-700"}`}>
+                            Fonte: {item.source}
+                          </span>
                           <span className={`px-2 py-1 rounded-full ${
                             item.releaseStatus === "Pre-order"
                               ? "bg-blue-100 text-blue-700"
