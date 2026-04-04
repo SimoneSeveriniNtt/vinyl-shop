@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Genre, Vinyl, CONDITIONS, getConditionLabel, getConditionQuality, isConditionSealed } from "@/lib/types";
+import { Genre, Vinyl, CONDITIONS, formatCondition, getConditionLabel, getConditionQuality, isConditionSealed } from "@/lib/types";
 import { Plus, Pencil, Trash2, Loader2, X, Save, LogOut, ShoppingBag, Disc3, RotateCcw, PackageCheck, Radar, Sparkles, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import AdminLogin from "@/components/AdminLogin";
@@ -313,13 +313,11 @@ export default function AdminPage() {
     }
 
     setSaving(true);
-    const vinylData = {
+    const baseVinylData = {
       title: form.title.trim(),
       artist: form.artist.trim(),
       description: form.description.trim() || null,
       price: parseFloat(form.price),
-      condition: form.condition,
-      is_sealed: form.is_sealed,
       genre_id: form.genre_id || null,
       cover_url: form.cover_url.trim() || null,
       available: form.available,
@@ -328,9 +326,27 @@ export default function AdminPage() {
       updated_at: new Date().toISOString(),
     };
 
+    const vinylDataWithSeparatedSealed = {
+      ...baseVinylData,
+      condition: form.condition,
+      is_sealed: form.is_sealed,
+    };
+
+    const vinylDataLegacy = {
+      ...baseVinylData,
+      condition: formatCondition(form.condition, form.is_sealed),
+    };
+
     if (editingId) {
       // Update
-      const { error } = await supabase.from("vinyls").update(vinylData).eq("id", editingId);
+      let { error } = await supabase.from("vinyls").update(vinylDataWithSeparatedSealed).eq("id", editingId);
+
+      // Backward-compatible fallback for environments where is_sealed column is not migrated yet.
+      if (error?.message?.includes("is_sealed")) {
+        const legacyUpdate = await supabase.from("vinyls").update(vinylDataLegacy).eq("id", editingId);
+        error = legacyUpdate.error;
+      }
+
       if (error) {
         showMessage("error", "Errore aggiornamento: " + error.message);
         setSaving(false);
@@ -346,7 +362,15 @@ export default function AdminPage() {
       showMessage("success", "Vinile aggiornato!");
     } else {
       // Insert
-      const { data, error } = await supabase.from("vinyls").insert(vinylData).select().single();
+      let insertRes = await supabase.from("vinyls").insert(vinylDataWithSeparatedSealed).select().single();
+
+      if (insertRes.error?.message?.includes("is_sealed")) {
+        insertRes = await supabase.from("vinyls").insert(vinylDataLegacy).select().single();
+      }
+
+      const data = insertRes.data;
+      const error = insertRes.error;
+
       if (error || !data) {
         showMessage("error", "Errore inserimento: " + (error?.message || "Errore sconosciuto"));
         setSaving(false);
